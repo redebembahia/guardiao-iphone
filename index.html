@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#07111f">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Diagnóstico guiado, privado e seguro para o iPhone 14 Pro Max.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Guardião">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; manifest-src 'self'; worker-src 'self'">
+  <title>Guardião iPhone</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
+  <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <noscript>
+    <div class="noscript">Ative o JavaScript para usar o diagnóstico local.</div>
+  </noscript>
+
+  <div id="installBanner" class="install-banner" hidden>
+    <div>
+      <strong>Instale no iPhone</strong>
+      <span>Abra como aplicativo em tela cheia.</span>
+    </div>
+    <button id="openInstallGuide" class="text-button" type="button">COMO INSTALAR</button>
+  </div>
+
+  <header class="app-header">
+    <div class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 48 48" role="img">
+        <path d="M24 3 41 10v12c0 11.5-6.9 18.9-17 23-10.1-4.1-17-11.5-17-23V10L24 3Z" fill="none" stroke="currentColor" stroke-width="3"/>
+        <path d="m15.5 24 5.3 5.3 11.8-12" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.4"/>
+      </svg>
+    </div>
+    <div class="brand-copy">
+      <strong>GUARDIÃO IPHONE</strong>
+      <span>Privado • Rede Bem Bahia</span>
+    </div>
+    <button id="headerAnalyze" class="compact-action" type="button">ANALISAR</button>
+  </header>
+
+  <main id="appMain">
+    <section id="homeView" class="view active" aria-labelledby="homeTitle">
+      <h1 id="homeTitle" class="sr-only">Início</h1>
+
+      <article class="score-card">
+        <div class="score-copy">
+          <span class="eyebrow">SAÚDE DO APARELHO</span>
+          <h2>iPhone 14 Pro Max</h2>
+          <p id="lastAnalysis">Nenhuma análise registrada</p>
+          <span id="confidenceBadge" class="confidence-badge neutral">AGUARDANDO DADOS</span>
+        </div>
+        <div class="score-gauge" aria-label="Pontuação de saúde">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="gauge-track" cx="60" cy="60" r="50"/>
+            <circle id="scoreProgress" class="gauge-progress" cx="60" cy="60" r="50"/>
+          </svg>
+          <div class="score-value">
+            <strong id="scoreNumber">—</strong>
+            <span>/100</span>
+          </div>
+        </div>
+        <p id="scoreStatus" class="score-status">Faça o diagnóstico guiado para receber uma avaliação.</p>
+        <button id="startDiagnosis" class="primary-button" type="button">INICIAR DIAGNÓSTICO GUIADO</button>
+        <p class="transparency-note">Estimativa baseada nas informações que você consulta nos Ajustes. O Safari não recebe acesso oculto ao sistema.</p>
+      </article>
+
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">VISÃO GERAL</span>
+          <h2>Última medição</h2>
+        </div>
+      </div>
+
+      <div class="metric-grid">
+        <article class="metric-card">
+          <span>ARMAZENAMENTO</span>
+          <strong id="storageMetric">—</strong>
+          <small id="storageDetail">Informe no diagnóstico</small>
+        </article>
+        <article class="metric-card">
+          <span>BATERIA</span>
+          <strong id="batteryMetric">—</strong>
+          <small id="batteryDetail">Capacidade máxima</small>
+        </article>
+        <article class="metric-card">
+          <span>TEMPERATURA</span>
+          <strong id="thermalMetric">—</strong>
+          <small id="thermalDetail">Sensação informada</small>
+        </article>
+        <article class="metric-card">
+          <span>HISTÓRICO</span>
+          <strong id="historyMetric">0</strong>
+          <small>análises locais</small>
+        </article>
+      </div>
+
+      <div class="section-heading recommendations-heading">
+        <div>
+          <span class="eyebrow">PRIORIDADES</span>
+          <h2>Recomendações seguras</h2>
+        </div>
+      </div>
+      <div id="recommendations" class="recommendations" aria-live="polite">
+        <article class="empty-card">
+          <strong>Diagnóstico ainda não realizado</strong>
+          <p>O Guardião indicará ações específicas sem apagar arquivos nem alterar configurações automaticamente.</p>
+        </article>
+      </div>
+
+      <div id="reportActions" class="report-actions" hidden>
+        <button id="shareReport" class="secondary-button" type="button">COMPARTILHAR RELATÓRIO</button>
+        <button id="newDiagnosis" class="ghost-button" type="button">NOVA ANÁLISE</button>
+      </div>
+    </section>
+
+    <section id="diagnosisView" class="view" aria-labelledby="diagnosisTitle" hidden>
+      <div class="view-toolbar">
+        <button id="cancelDiagnosis" class="back-button" type="button" aria-label="Cancelar diagnóstico">‹</button>
+        <div>
+          <span class="eyebrow">DIAGNÓSTICO GUIADO</span>
+          <h1 id="diagnosisTitle">Informe o que o iOS mostra</h1>
+        </div>
+      </div>
+
+      <div class="step-progress" aria-label="Progresso do diagnóstico">
+        <div id="stepProgressBar"></div>
+      </div>
+      <p id="stepCounter" class="step-counter">Etapa 1 de 4</p>
+
+      <form id="diagnosisForm" novalidate>
+        <fieldset class="wizard-step active" data-step="0">
+          <legend tabindex="-1">Armazenamento</legend>
+          <p class="step-intro">Consulte em <strong>Ajustes › Geral › Armazenamento do iPhone</strong>.</p>
+
+          <label for="totalStorage">Capacidade total</label>
+          <select id="totalStorage" name="totalStorage" required>
+            <option value="">Selecione</option>
+            <option value="128">128 GB</option>
+            <option value="256">256 GB</option>
+            <option value="512">512 GB</option>
+            <option value="1024">1 TB</option>
+          </select>
+
+          <label for="freeStorage">Espaço disponível em GB</label>
+          <input id="freeStorage" name="freeStorage" type="number" min="0" max="1024" step="0.1" inputmode="decimal" placeholder="Ex.: 42,5" required>
+
+          <div class="optional-block">
+            <span class="optional-label">Maior aplicativo — opcional</span>
+            <div class="split-fields">
+              <input id="largestApp" name="largestApp" type="text" maxlength="40" placeholder="Nome do aplicativo" aria-label="Nome do maior aplicativo">
+              <input id="largestAppSize" name="largestAppSize" type="number" min="0" max="1024" step="0.1" inputmode="decimal" placeholder="GB" aria-label="Tamanho do maior aplicativo em GB">
+            </div>
+          </div>
+          <p class="field-error" data-error-for="storage" role="alert"></p>
+        </fieldset>
+
+        <fieldset class="wizard-step" data-step="1" hidden>
+          <legend tabindex="-1">Bateria</legend>
+          <p class="step-intro">Consulte em <strong>Ajustes › Bateria › Saúde da Bateria e Carregamento</strong>.</p>
+
+          <label for="batteryCapacity">Capacidade máxima</label>
+          <div class="suffix-input">
+            <input id="batteryCapacity" name="batteryCapacity" type="number" min="1" max="100" step="1" inputmode="numeric" placeholder="Ex.: 87" required>
+            <span>%</span>
+          </div>
+
+          <label for="batteryStatus">Mensagem exibida pelo iOS</label>
+          <select id="batteryStatus" name="batteryStatus" required>
+            <option value="">Selecione</option>
+            <option value="normal">Funcionamento normal</option>
+            <option value="reduced">Desempenho reduzido</option>
+            <option value="service">Serviço recomendado</option>
+            <option value="unknown">Não encontrei essa informação</option>
+          </select>
+
+          <label class="toggle-row">
+            <input id="fastDrain" name="fastDrain" type="checkbox">
+            <span>
+              <strong>A bateria acaba muito rápido</strong>
+              <small>Mesmo sem jogos, câmera ou navegação intensa.</small>
+            </span>
+          </label>
+          <p class="field-error" data-error-for="battery" role="alert"></p>
+        </fieldset>
+
+        <fieldset class="wizard-step" data-step="2" hidden>
+          <legend tabindex="-1">Temperatura</legend>
+          <p class="step-intro">Escolha a situação que melhor representa o aparelho agora ou nos últimos dias.</p>
+
+          <div class="choice-list" role="radiogroup" aria-label="Estado de temperatura">
+            <label class="choice-card">
+              <input type="radio" name="thermalState" value="normal" required>
+              <span><strong>Normal</strong><small>Sem calor perceptível.</small></span>
+            </label>
+            <label class="choice-card">
+              <input type="radio" name="thermalState" value="warm">
+              <span><strong>Morno</strong><small>Aquece e depois volta ao normal.</small></span>
+            </label>
+            <label class="choice-card">
+              <input type="radio" name="thermalState" value="hot">
+              <span><strong>Muito quente</strong><small>Desconfortável ao toque ou frequente.</small></span>
+            </label>
+            <label class="choice-card danger-choice">
+              <input type="radio" name="thermalState" value="warning">
+              <span><strong>Aviso de temperatura</strong><small>Ou “Recarga em espera”.</small></span>
+            </label>
+          </div>
+
+          <span class="optional-label">O que costuma acontecer quando aquece?</span>
+          <div class="chip-grid">
+            <label><input type="checkbox" name="heatContext" value="charging"><span>Carregando</span></label>
+            <label><input type="checkbox" name="heatContext" value="camera"><span>Câmera ou jogo</span></label>
+            <label><input type="checkbox" name="heatContext" value="backup"><span>Backup</span></label>
+            <label><input type="checkbox" name="heatContext" value="sun"><span>Sol ou carro</span></label>
+          </div>
+          <p class="field-error" data-error-for="thermal" role="alert"></p>
+        </fieldset>
+
+        <fieldset class="wizard-step" data-step="3" hidden>
+          <legend tabindex="-1">Desempenho</legend>
+          <p class="step-intro">Marque somente o que acontece com frequência.</p>
+
+          <div class="check-list">
+            <label><input type="checkbox" name="symptom" value="slow"><span>Aplicativos e telas demoram para abrir</span></label>
+            <label><input type="checkbox" name="symptom" value="reload"><span>Aplicativos recarregam ao alternar entre eles</span></label>
+            <label><input type="checkbox" name="symptom" value="keyboard"><span>Teclado ou toques respondem com atraso</span></label>
+            <label><input type="checkbox" name="symptom" value="restart"><span>Reinícios ou aplicativos fechando sozinhos</span></label>
+          </div>
+
+          <label for="updateStatus">Atualização do iOS</label>
+          <select id="updateStatus" name="updateStatus" required>
+            <option value="">Selecione</option>
+            <option value="current">iOS atualizado</option>
+            <option value="pending">Existe atualização pendente</option>
+            <option value="unknown">Ainda não verifiquei</option>
+          </select>
+          <p class="field-error" data-error-for="performance" role="alert"></p>
+        </fieldset>
+
+        <div class="wizard-actions">
+          <button id="previousStep" class="ghost-button" type="button" hidden>VOLTAR</button>
+          <button id="nextStep" class="primary-button" type="button">CONTINUAR</button>
+          <button id="finishDiagnosis" class="primary-button" type="submit" hidden>GERAR DIAGNÓSTICO</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="guidesView" class="view" aria-labelledby="guidesTitle" hidden>
+      <div class="view-heading">
+        <span class="eyebrow">AÇÕES SEGURAS</span>
+        <h1 id="guidesTitle">Guias de otimização</h1>
+        <p>Todas as mudanças são confirmadas por você nos Ajustes ou no aplicativo responsável.</p>
+      </div>
+
+      <div class="guide-list">
+        <details open>
+          <summary><span class="guide-number">1</span><span><strong>LIBERAR ARMAZENAMENTO</strong><small>Sem apagar conteúdo automaticamente</small></span></summary>
+          <ol>
+            <li>Abra <strong>Ajustes › Geral › Armazenamento do iPhone</strong>.</li>
+            <li>Espere a lista terminar de calcular e revise os maiores aplicativos.</li>
+            <li>Use <strong>Desinstalar App</strong> somente quando quiser preservar documentos e dados.</li>
+            <li>Confirme backup antes de apagar Fotos, WhatsApp ou arquivos profissionais.</li>
+          </ol>
+        </details>
+
+        <details>
+          <summary><span class="guide-number">2</span><span><strong>REDUZIR CONSUMO</strong><small>Identifique atividade real em segundo plano</small></span></summary>
+          <ol>
+            <li>Abra <strong>Ajustes › Bateria</strong>.</li>
+            <li>Compare <strong>Últimas 24 horas</strong> e <strong>Últimos 10 dias</strong>.</li>
+            <li>Toque em <strong>Mostrar Atividade</strong> e procure uso alto com pouca tela ligada.</li>
+            <li>Não restrinja mensageiros profissionais sem avaliar o atraso de notificações.</li>
+          </ol>
+        </details>
+
+        <details>
+          <summary><span class="guide-number">3</span><span><strong>CONTROLAR AQUECIMENTO</strong><small>Procedimento seguro para o aparelho</small></span></summary>
+          <ol>
+            <li>Interrompa jogos, câmera, navegação e backup pesado.</li>
+            <li>Desconecte o carregador e retire a capa.</li>
+            <li>Leve o iPhone para um local ventilado, longe do sol.</li>
+            <li>Não use geladeira, gelo ou água para resfriar.</li>
+          </ol>
+        </details>
+
+        <details>
+          <summary><span class="guide-number">4</span><span><strong>WHATSAPP E DOWNLOADS</strong><small>Revise os maiores conteúdos</small></span></summary>
+          <ol>
+            <li>No WhatsApp, abra <strong>Configurações › Armazenamento e dados › Gerenciar armazenamento</strong>.</li>
+            <li>Revise vídeos e arquivos encaminhados muitas vezes.</li>
+            <li>Verifique downloads offline de Netflix, Spotify, YouTube e outros serviços.</li>
+            <li>Não apague conversas empresariais antes de confirmar o backup.</li>
+          </ol>
+        </details>
+      </div>
+
+      <article class="file-analyzer">
+        <span class="eyebrow">ANÁLISE OPCIONAL</span>
+        <h2>Somar arquivos selecionados</h2>
+        <p>Escolha arquivos conscientemente. O Guardião soma apenas quantidade e tamanho; não lê nem envia o conteúdo.</p>
+        <input id="filePicker" class="file-input" type="file" multiple>
+        <label for="filePicker" class="secondary-button file-picker-button">SELECIONAR ARQUIVOS</label>
+        <div id="fileResult" class="file-result" aria-live="polite">Nenhum arquivo selecionado.</div>
+      </article>
+    </section>
+
+    <section id="historyView" class="view" aria-labelledby="historyTitle" hidden>
+      <div class="view-heading">
+        <span class="eyebrow">SOMENTE NESTE APARELHO</span>
+        <h1 id="historyTitle">Histórico de análises</h1>
+        <p>Até 30 resultados guardados localmente. Nada é enviado para servidores.</p>
+      </div>
+      <div id="historyList" class="history-list"></div>
+      <div class="history-actions">
+        <button id="exportHistory" class="secondary-button" type="button">EXPORTAR DADOS</button>
+        <button id="clearHistory" class="danger-button" type="button">APAGAR DADOS LOCAIS</button>
+      </div>
+    </section>
+
+    <section id="privacyView" class="view" aria-labelledby="privacyTitle" hidden>
+      <div class="view-heading">
+        <span class="eyebrow">TRANSPARÊNCIA</span>
+        <h1 id="privacyTitle">Privacidade e limites</h1>
+      </div>
+      <article class="privacy-card positive">
+        <h2>O que o Guardião faz</h2>
+        <ul>
+          <li>Calcula recomendações com os dados informados por você.</li>
+          <li>Mantém o diagnóstico e o histórico somente no iPhone.</li>
+          <li>Funciona offline depois do primeiro acesso.</li>
+          <li>Compartilha o relatório apenas quando você solicita.</li>
+        </ul>
+      </article>
+      <article class="privacy-card limit">
+        <h2>O que o iOS não permite</h2>
+        <ul>
+          <li>Ler automaticamente armazenamento geral, RAM ou aplicativos instalados.</li>
+          <li>Medir temperatura ou capacidade máxima da bateria pelo Safari.</li>
+          <li>Apagar arquivos, limpar caches ou alterar Ajustes sozinho.</li>
+          <li>Acessar fotos, mensagens, senhas, câmera, microfone ou localização.</li>
+        </ul>
+      </article>
+      <article class="privacy-card hosting">
+        <h2>Hospedagem do aplicativo</h2>
+        <p>Ao abrir o endereço, a hospedagem pode registrar metadados técnicos padrão, como IP, horário e navegador. Os dados preenchidos no diagnóstico não são enviados.</p>
+      </article>
+      <article class="local-storage-card">
+        <span>Histórico local do Guardião</span>
+        <strong id="localDataSize">Calculando…</strong>
+        <small>Estimativa apenas dos registros deste aplicativo, não do armazenamento do iPhone.</small>
+      </article>
+    </section>
+  </main>
+
+  <nav class="bottom-nav" aria-label="Navegação principal">
+    <button class="nav-item active" type="button" data-view="homeView" aria-current="page">
+      <span aria-hidden="true">⌂</span><small>Início</small>
+    </button>
+    <button class="nav-item" type="button" data-view="guidesView">
+      <span aria-hidden="true">✓</span><small>Guias</small>
+    </button>
+    <button class="nav-item" type="button" data-view="historyView">
+      <span aria-hidden="true">◷</span><small>Histórico</small>
+    </button>
+    <button class="nav-item" type="button" data-view="privacyView">
+      <span aria-hidden="true">⛨</span><small>Privacidade</small>
+    </button>
+  </nav>
+
+  <dialog id="installDialog" class="app-dialog" aria-labelledby="installDialogTitle">
+    <form method="dialog">
+      <div class="dialog-icon" aria-hidden="true">⇧</div>
+      <h2 id="installDialogTitle">Instalar no iPhone</h2>
+      <ol>
+        <li>Abra este endereço no <strong>Safari</strong>.</li>
+        <li>Toque em <strong>Compartilhar</strong> na barra do Safari.</li>
+        <li>Escolha <strong>Adicionar à Tela de Início</strong>.</li>
+        <li>Mantenha <strong>Abrir como App</strong> ativado e toque em Adicionar.</li>
+      </ol>
+      <button class="primary-button" value="close">ENTENDI</button>
+    </form>
+  </dialog>
+
+  <dialog id="confirmDialog" class="app-dialog confirm-dialog" aria-labelledby="confirmDialogTitle">
+    <form method="dialog">
+      <div class="dialog-icon danger" aria-hidden="true">!</div>
+      <h2 id="confirmDialogTitle">Apagar histórico?</h2>
+      <p>As análises salvas neste aparelho serão removidas. Essa ação não apaga nada do iPhone.</p>
+      <div class="dialog-actions">
+        <button class="ghost-button" value="cancel">CANCELAR</button>
+        <button id="confirmClear" class="danger-button" value="confirm">APAGAR</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>

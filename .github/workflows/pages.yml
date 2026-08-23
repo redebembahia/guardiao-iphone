@@ -1,0 +1,36 @@
+name: Publicar Guardião iPhone
+
+on:
+  push:
+    branches:
+      - main
+      - principal
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o projeto
+        uses: actions/checkout@v6
+      - name: Configurar o GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Preparar os arquivos
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: .
+      - name: Publicar
+        id: deployment
+        uses: actions/deploy-pages@v4
