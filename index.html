@@ -49,12 +49,12 @@
 
       <article class="score-card">
         <div class="score-copy">
-          <span class="eyebrow">SAÚDE DO APARELHO</span>
+          <span class="eyebrow">ÍNDICE ESTIMADO</span>
           <h2>iPhone 14 Pro Max</h2>
           <p id="lastAnalysis">Nenhuma análise registrada</p>
           <span id="confidenceBadge" class="confidence-badge neutral">AGUARDANDO DADOS</span>
         </div>
-        <div class="score-gauge" aria-label="Pontuação de saúde">
+        <div class="score-gauge" aria-label="Pontuação estimada do aparelho">
           <svg viewBox="0 0 120 120" aria-hidden="true">
             <circle class="gauge-track" cx="60" cy="60" r="50"/>
             <circle id="scoreProgress" class="gauge-progress" cx="60" cy="60" r="50"/>
@@ -150,10 +150,10 @@
           <input id="freeStorage" name="freeStorage" type="number" min="0" max="1024" step="0.1" inputmode="decimal" placeholder="Ex.: 42,5" required>
 
           <div class="optional-block">
-            <span class="optional-label">Maior aplicativo — opcional</span>
+            <span class="optional-label">Maior item no armazenamento — opcional</span>
             <div class="split-fields">
-              <input id="largestApp" name="largestApp" type="text" maxlength="40" placeholder="Nome do aplicativo" aria-label="Nome do maior aplicativo">
-              <input id="largestAppSize" name="largestAppSize" type="number" min="0" max="1024" step="0.1" inputmode="decimal" placeholder="GB" aria-label="Tamanho do maior aplicativo em GB">
+              <input id="largestApp" name="largestApp" type="text" maxlength="40" placeholder="Ex.: Fotos ou WhatsApp" aria-label="Nome do maior item no armazenamento">
+              <input id="largestAppSize" name="largestAppSize" type="number" min="0" max="1024" step="0.1" inputmode="decimal" placeholder="GB" aria-label="Tamanho do maior item em GB">
             </div>
           </div>
           <p class="field-error" data-error-for="storage" role="alert"></p>
@@ -229,7 +229,8 @@
             <label><input type="checkbox" name="symptom" value="slow"><span>Aplicativos e telas demoram para abrir</span></label>
             <label><input type="checkbox" name="symptom" value="reload"><span>Aplicativos recarregam ao alternar entre eles</span></label>
             <label><input type="checkbox" name="symptom" value="keyboard"><span>Teclado ou toques respondem com atraso</span></label>
-            <label><input type="checkbox" name="symptom" value="restart"><span>Reinícios ou aplicativos fechando sozinhos</span></label>
+            <label><input type="checkbox" name="symptom" value="deviceRestart"><span>O iPhone reinicia ou desliga sozinho</span></label>
+            <label><input type="checkbox" name="symptom" value="appCrash"><span>Aplicativos fecham sozinhos</span></label>
           </div>
 
           <label for="updateStatus">Atualização do iOS</label>

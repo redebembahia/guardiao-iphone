@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_NAME = "guardiao-iphone-v1.0.2";
+const CACHE_NAME = "guardiao-iphone-v1.1.0";
 const APP_SHELL = [
   "./",
   "./index.html",

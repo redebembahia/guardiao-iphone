@@ -24,7 +24,9 @@ const symptomLabels = {
   slow: "abertura lenta de aplicativos",
   reload: "recarregamento frequente de aplicativos",
   keyboard: "atraso no teclado ou nos toques",
-  restart: "reinícios ou aplicativos fechando"
+  restart: "reinícios ou aplicativos fechando (registro anterior)",
+  deviceRestart: "reinícios ou desligamentos inesperados",
+  appCrash: "aplicativos fechando sozinhos"
 };
 
 const appState = {
@@ -261,36 +263,43 @@ function calculateDiagnosis(input) {
     });
   }
 
+  let capacityPenalty = 0;
+  if (input.batteryCapacity < 80) capacityPenalty = 18;
+  else if (input.batteryCapacity < 85) capacityPenalty = 12;
+  else if (input.batteryCapacity < 90) capacityPenalty = 6;
+
+  const statusPenalty = input.batteryStatus === "service" ? 25 : input.batteryStatus === "reduced" ? 15 : 0;
+  let batteryPenalty = Math.max(capacityPenalty, statusPenalty);
+  if (input.batteryStatus === "reduced" && input.batteryCapacity < 80) {
+    batteryPenalty = Math.min(25, batteryPenalty + 5);
+  }
+  score -= batteryPenalty;
+
   if (input.batteryStatus === "service") {
-    score -= 25;
     recommendations.push({
       priority: "critical",
       title: "O iOS recomenda serviço na bateria",
       body: "Faça backup e procure a Apple ou uma assistência autorizada. A mensagem do sistema é mais importante que qualquer estimativa deste aplicativo."
     });
   } else if (input.batteryStatus === "reduced") {
-    score -= 15;
     recommendations.push({
       priority: "high",
-      title: "Desempenho da bateria está reduzido",
-      body: "Acompanhe desligamentos, autonomia e a mensagem em Saúde da Bateria. Considere avaliação técnica se houver impacto diário."
+      title: "A bateria está limitando o desempenho",
+      body: `Com ${input.batteryCapacity}% de capacidade e o aviso de desempenho reduzido, a bateria é uma causa provável de lentidão, descarga rápida ou desligamentos. Faça backup e agende uma avaliação; a substituição pode restaurar autonomia e desempenho.`
     });
   } else if (input.batteryCapacity < 80) {
-    score -= 18;
     recommendations.push({
       priority: "high",
       title: "Capacidade máxima abaixo de 80%",
-      body: "Isso não confirma defeito sozinho. Verifique a mensagem do próprio iOS e procure avaliação técnica se a autonomia estiver ruim."
+      body: "A bateria está abaixo da referência de retenção prevista para este modelo. Confirme a mensagem do próprio iOS e programe uma avaliação se houver pouca autonomia, lentidão ou desligamentos."
     });
   } else if (input.batteryCapacity < 85) {
-    score -= 12;
     recommendations.push({
       priority: "high",
       title: "Bateria com desgaste relevante",
       body: "Compare a autonomia nos próximos dias e verifique os aplicativos com maior atividade em Ajustes › Bateria."
     });
   } else if (input.batteryCapacity < 90) {
-    score -= 6;
     recommendations.push({
       priority: "normal",
       title: "Acompanhe a evolução da bateria",
@@ -312,14 +321,28 @@ function calculateDiagnosis(input) {
   if (input.symptoms.includes("reload")) symptomPenalty += 3;
   if (input.symptoms.includes("keyboard")) symptomPenalty += 3;
   if (input.symptoms.includes("restart")) symptomPenalty += 9;
+  if (input.symptoms.includes("deviceRestart")) symptomPenalty += 9;
+  if (input.symptoms.includes("appCrash")) symptomPenalty += 4;
   score -= Math.min(symptomPenalty, 15);
 
-  if (input.symptoms.length) {
-    const description = input.symptoms.map((item) => symptomLabels[item]).join(", ");
+  const hasUnexpectedRestart = input.symptoms.includes("restart") || input.symptoms.includes("deviceRestart");
+  if (hasUnexpectedRestart) {
     recommendations.push({
-      priority: input.symptoms.includes("restart") ? "high" : "normal",
-      title: "Corrija os sintomas de desempenho",
-      body: `Você informou ${description}. Reinicie o iPhone, confirme espaço livre e atualize o iOS e os aplicativos antes de medidas mais invasivas.`
+      priority: "high",
+      title: "Priorize os reinícios ou desligamentos inesperados",
+      body: input.batteryStatus === "reduced" || input.batteryStatus === "service"
+        ? "A bateria degradada pode estar relacionada. Faça backup e procure avaliação da bateria; se o problema continuar após o serviço, solicite um diagnóstico completo do aparelho."
+        : "Faça backup, atualize o iOS e observe se o problema se repete. Se continuar, procure diagnóstico técnico do aparelho."
+    });
+  }
+
+  const otherSymptoms = input.symptoms.filter((item) => item !== "restart" && item !== "deviceRestart");
+  if (otherSymptoms.length) {
+    const description = otherSymptoms.map((item) => symptomLabels[item]).filter(Boolean).join(", ");
+    recommendations.push({
+      priority: "normal",
+      title: "Corrija os demais sintomas de desempenho",
+      body: `Você informou ${description}. Reinicie o iPhone e atualize o iOS e os aplicativos antes de medidas mais invasivas.`
     });
   }
 
@@ -339,11 +362,26 @@ function calculateDiagnosis(input) {
   }
 
   if (input.largestApp && input.largestAppSize >= 8) {
-    recommendations.push({
-      priority: "normal",
-      title: `Revise o conteúdo de ${input.largestApp}`,
-      body: `O aplicativo ocupa ${formatGb(input.largestAppSize)}. Apague downloads ou projetos dentro dele somente após confirmar o backup.`
-    });
+    const normalizedLargest = input.largestApp.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    if (/(^|\s)(fotos|photos)(\s|$)/.test(normalizedLargest)) {
+      recommendations.push({
+        priority: "normal",
+        title: freeRatio >= 0.15 ? "Fotos ocupa muito espaço, mas não há urgência" : "Revise fotos e vídeos com segurança",
+        body: `A biblioteca ocupa ${formatGb(input.largestAppSize)} e restam ${formatGb(input.freeStorage)} livres. Confirme uma cópia independente ou espaço suficiente no iCloud antes de apagar. Você também pode combinar duplicados ou usar Otimizar no iPhone. Atenção: no Fotos do iCloud, uma exclusão é sincronizada com os outros aparelhos.`
+      });
+    } else if (normalizedLargest.includes("whatsapp")) {
+      recommendations.push({
+        priority: "normal",
+        title: "Revise os maiores arquivos do WhatsApp",
+        body: `O item ocupa ${formatGb(input.largestAppSize)}. Abra WhatsApp › Configurações › Armazenamento e dados › Gerenciar armazenamento e confirme o backup antes de excluir conteúdo importante.`
+      });
+    } else {
+      recommendations.push({
+        priority: "normal",
+        title: `Revise os dados de ${input.largestApp}`,
+        body: `O item ocupa ${formatGb(input.largestAppSize)}. Abra seus controles de armazenamento e remova somente conteúdo dispensável após confirmar o backup.`
+      });
+    }
   }
 
   if (!recommendations.length) {
@@ -362,7 +400,7 @@ function calculateDiagnosis(input) {
     createdAt: Date.now(),
     model: "iPhone 14 Pro Max",
     score,
-    confidence: "complete",
+    confidence: "form-complete",
     input,
     recommendations
   };
@@ -380,7 +418,7 @@ function renderLatest(result) {
   const used = Math.max(0, result.input.totalStorage - result.input.freeStorage);
   const usedPercent = Math.round((used / result.input.totalStorage) * 100);
   byId("lastAnalysis").textContent = `Atualizada em ${formatDate(result.createdAt)}`;
-  byId("confidenceBadge").textContent = "DIAGNÓSTICO COMPLETO";
+  byId("confidenceBadge").textContent = "DADOS PREENCHIDOS";
   byId("confidenceBadge").className = "confidence-badge complete";
   byId("scoreNumber").textContent = String(result.score);
   byId("scoreStatus").textContent = scoreStatus(result.score);
@@ -529,6 +567,7 @@ function buildReport(result) {
     `${result.model} • ${formatDate(result.createdAt)}`,
     "",
     `Nota estimada: ${result.score}/100`,
+    `Classificação: ${scoreStatus(result.score)}`,
     `Armazenamento: ${formatGb(i.freeStorage)} livres de ${formatGb(i.totalStorage)}`,
     `Capacidade máxima da bateria: ${i.batteryCapacity}%`,
     `Mensagem da bateria: ${batteryLabels[i.batteryStatus] || "Não informada"}`,
