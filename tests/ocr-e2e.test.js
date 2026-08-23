@@ -32,7 +32,7 @@ async function resizeLikeApp(filePath) {
 async function main() {
   const cases = [
     {
-      file: "storage-screen.svg",
+      file: "storage-screen.png",
       expected: {
         totalStorage: 256,
         freeStorage: 45.5,
@@ -41,7 +41,7 @@ async function main() {
       }
     },
     {
-      file: "battery-screen.svg",
+      file: "battery-screen.png",
       expected: {
         batteryCapacity: 75,
         batteryStatus: "reduced"
