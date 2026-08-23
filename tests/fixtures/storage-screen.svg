@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1290" height="2796" viewBox="0 0 1290 2796">
+  <rect width="1290" height="2796" fill="#f2f2f7"/>
+  <g fill="#111111" font-family="Arial, sans-serif">
+    <text x="70" y="95" font-size="42">10:45</text>
+    <text x="1030" y="95" font-size="42">31%</text>
+    <text x="645" y="245" font-size="55" font-weight="700" text-anchor="middle">Armazenamento do iPhone</text>
+    <text x="70" y="430" font-size="48">210,5 GB de 256 GB usados</text>
+    <text x="70" y="760" font-size="50" font-weight="700">Fotos</text>
+    <text x="1040" y="760" font-size="46">76 GB</text>
+    <text x="70" y="900" font-size="50" font-weight="700">WhatsApp</text>
+    <text x="1000" y="900" font-size="46">18,4 GB</text>
+  </g>
+</svg>

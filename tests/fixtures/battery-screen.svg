@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1290" height="2796" viewBox="0 0 1290 2796">
+  <rect width="1290" height="2796" fill="#f2f2f7"/>
+  <g fill="#111111" font-family="Arial, sans-serif">
+    <text x="70" y="95" font-size="42">10:48</text>
+    <text x="1030" y="95" font-size="42">29%</text>
+    <text x="645" y="245" font-size="54" font-weight="700" text-anchor="middle">Saúde da Bateria e Carregamento</text>
+    <text x="70" y="520" font-size="48" font-weight="700">Capacidade Máxima</text>
+    <text x="1080" y="520" font-size="48">75%</text>
+    <text x="70" y="760" font-size="48" font-weight="700">Capacidade de Desempenho Máximo</text>
+    <text x="70" y="900" font-size="42">O gerenciamento de desempenho foi aplicado.</text>
+  </g>
+</svg>

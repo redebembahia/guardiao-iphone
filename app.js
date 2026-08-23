@@ -5,18 +5,22 @@ const DB_VERSION = 1;
 const STORE_NAME = "analyses";
 const MAX_HISTORY = 30;
 const GAUGE_LENGTH = 314.159;
+const RULES_VERSION = "1.2.0";
 
 const thermalLabels = {
   normal: "Normal",
   warm: "Morno",
   hot: "Muito quente",
-  warning: "Aviso térmico"
+  warning: "Aviso térmico",
+  charging_hold: "Recarga em espera",
+  unknown: "Não verificada"
 };
 
 const batteryLabels = {
   normal: "Funcionamento normal",
   reduced: "Desempenho reduzido",
   service: "Serviço recomendado",
+  unverified_part: "Bateria ou peça não verificada",
   unknown: "Não verificado"
 };
 
@@ -33,7 +37,11 @@ const appState = {
   currentStep: 0,
   latest: null,
   history: [],
-  deferredInstallPrompt: null
+  deferredInstallPrompt: null,
+  automaticSources: {},
+  clientEnvironment: null,
+  automaticBusy: false,
+  automaticAbortController: null
 };
 
 const byId = (id) => document.getElementById(id);
@@ -43,6 +51,7 @@ document.addEventListener("DOMContentLoaded", initialize);
 
 async function initialize() {
   bindNavigation();
+  bindAutomaticDiagnosis();
   bindDiagnosis();
   bindDialogs();
   bindTools();
@@ -56,16 +65,19 @@ function bindNavigation() {
   all(".nav-item").forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.view));
   });
-  byId("headerAnalyze").addEventListener("click", beginDiagnosis);
+  byId("headerAnalyze").addEventListener("click", beginAutomaticDiagnosis);
+  byId("startAutomatic").addEventListener("click", beginAutomaticDiagnosis);
   byId("startDiagnosis").addEventListener("click", beginDiagnosis);
-  byId("newDiagnosis").addEventListener("click", beginDiagnosis);
+  byId("newDiagnosis").addEventListener("click", beginAutomaticDiagnosis);
 }
 
 function switchView(viewId) {
+  let activeView = null;
   all(".view").forEach((view) => {
     const isActive = view.id === viewId;
     view.hidden = !isActive;
     view.classList.toggle("active", isActive);
+    if (isActive) activeView = view;
   });
   all(".nav-item").forEach((item) => {
     const isActive = item.dataset.view === viewId;
@@ -74,16 +86,357 @@ function switchView(viewId) {
     else item.removeAttribute("aria-current");
   });
   window.scrollTo({ top: 0, behavior: "smooth" });
+  const heading = activeView?.querySelector("h1");
+  if (heading) {
+    heading.setAttribute("tabindex", "-1");
+    heading.focus({ preventScroll: true });
+  }
   if (viewId === "historyView") renderHistory();
   if (viewId === "privacyView") updateLocalDataSize();
+}
+
+function beginAutomaticDiagnosis() {
+  byId("screenshotPicker").value = "";
+  byId("automaticReviewForm").reset();
+  byId("automaticReviewForm").hidden = true;
+  byId("automaticProgress").hidden = true;
+  byId("automaticReviewError").textContent = "";
+  appState.automaticSources = {};
+  appState.clientEnvironment = detectClientEnvironment();
+  renderClientEnvironment(appState.clientEnvironment);
+  switchView("automaticView");
+  all(".nav-item").forEach((item) => {
+    item.classList.remove("active");
+    item.removeAttribute("aria-current");
+  });
+}
+
+function bindAutomaticDiagnosis() {
+  byId("cancelAutomatic").addEventListener("click", () => {
+    if (appState.automaticBusy) {
+      appState.automaticAbortController?.abort();
+      showToast("Cancelando a leitura…");
+      return;
+    }
+    switchView("homeView");
+  });
+  byId("automaticManualFallback").addEventListener("click", beginDiagnosis);
+  byId("screenshotPicker").addEventListener("change", handleScreenshotSelection);
+  byId("rescanScreenshots").addEventListener("click", () => {
+    if (appState.automaticBusy) return;
+    byId("screenshotPicker").click();
+  });
+  byId("automaticReviewForm").addEventListener("submit", finishAutomaticDiagnosis);
+
+  [
+    ["autoTotalStorage", "totalStorage", "autoTotalStorageSource"],
+    ["autoFreeStorage", "freeStorage", "autoFreeStorageSource"],
+    ["autoBatteryCapacity", "batteryCapacity", "autoBatteryCapacitySource"],
+    ["autoBatteryStatus", "batteryStatus", "autoBatteryStatusSource"],
+    ["autoThermalState", "thermalState", "autoThermalStateSource"],
+    ["autoUpdateStatus", "updateStatus", "autoUpdateStatusSource"],
+    ["autoLargestApp", "largestApp"],
+    ["autoLargestAppSize", "largestAppSize"],
+    ["autoTopBatteryApp", "topBatteryApp"],
+    ["autoTopBatteryPercent", "topBatteryPercent"]
+  ].forEach(([inputId, sourceKey, badgeId]) => {
+    byId(inputId).addEventListener("input", () => markAutomaticFieldEdited(inputId, sourceKey, badgeId));
+  });
+}
+
+async function handleScreenshotSelection(event) {
+  const files = Array.from(event.target.files || []);
+  if (!files.length || appState.automaticBusy) return;
+  const scanner = window.GuardianScreenshotImport;
+  if (!scanner?.scan) {
+    showToast("O leitor local ainda não está disponível. Reabra o aplicativo com internet e tente novamente.");
+    return;
+  }
+
+  setAutomaticBusy(true);
+  const controller = new AbortController();
+  appState.automaticAbortController = controller;
+  byId("automaticReviewForm").hidden = true;
+  byId("automaticReviewError").textContent = "";
+  updateAutomaticProgress({
+    percent: 1,
+    title: "Preparando o leitor local…",
+    detail: "Nenhuma captura será enviada para a internet."
+  });
+
+  try {
+    const parsed = await scanner.scan(files, {
+      onProgress: updateAutomaticProgress,
+      signal: controller.signal
+    });
+    populateAutomaticReview(parsed || {});
+    updateAutomaticProgress({
+      percent: 100,
+      title: "Leitura concluída",
+      detail: "As imagens e o texto bruto já foram descartados."
+    });
+    byId("automaticReviewForm").hidden = false;
+    byId("automaticReviewForm").scrollIntoView({ behavior: "smooth", block: "start" });
+    const foundCount = Object.values(parsed?.fields || {}).filter((value) => value !== null && value !== undefined && value !== "" && value !== "unknown").length;
+    showToast(foundCount ? "Dados extraídos. Confira e confirme." : "Não consegui identificar essas telas. Confira os campos ou use o modo manual.");
+  } catch (error) {
+    byId("automaticProgress").hidden = true;
+    if (error?.name === "AbortError") {
+      switchView("homeView");
+      showToast("Leitura cancelada. Nenhuma captura foi armazenada.");
+      return;
+    }
+    const message = error?.message || "Não foi possível ler as capturas.";
+    showToast(message);
+  } finally {
+    if (appState.automaticAbortController === controller) appState.automaticAbortController = null;
+    event.target.value = "";
+    setAutomaticBusy(false);
+  }
+}
+
+function updateAutomaticProgress(update = {}) {
+  const percent = Math.max(0, Math.min(100, Number(update.percent) || 0));
+  const container = byId("automaticProgress");
+  container.hidden = false;
+  byId("automaticProgressBar").value = percent;
+  if (update.title) byId("automaticProgressTitle").textContent = update.title;
+  if (update.detail) byId("automaticProgressDetail").textContent = update.detail;
+}
+
+function setAutomaticBusy(busy) {
+  appState.automaticBusy = busy;
+  byId("screenshotPicker").disabled = busy;
+  const label = document.querySelector('label[for="screenshotPicker"]');
+  if (label) label.setAttribute("aria-disabled", String(busy));
+  byId("automaticManualFallback").disabled = busy;
+  byId("rescanScreenshots").disabled = busy;
+  byId("cancelAutomatic").setAttribute("aria-label", busy ? "Cancelar leitura" : "Voltar ao início");
+  all(".nav-item").forEach((item) => { item.disabled = busy; });
+}
+
+function populateAutomaticReview(parsed) {
+  const fields = parsed.fields || {};
+  appState.automaticSources = {};
+
+  setAutomaticField("TotalStorage", fields.totalStorage);
+  setAutomaticField("FreeStorage", fields.freeStorage);
+  setAutomaticField("BatteryCapacity", fields.batteryCapacity);
+  setAutomaticField("BatteryStatus", fields.batteryStatus);
+
+  byId("autoThermalState").value = fields.thermalState || "unknown";
+  byId("autoUpdateStatus").value = fields.updateStatus || "unknown";
+  byId("autoLargestApp").value = formatRecognizedName(fields.largestApp);
+  byId("autoLargestAppSize").value = formatInputNumber(fields.largestAppSize);
+  byId("autoTopBatteryApp").value = formatRecognizedName(fields.topBatteryApp);
+  byId("autoTopBatteryPercent").value = formatInputNumber(fields.topBatteryPercent);
+
+  appState.automaticSources.thermalState = fields.thermalState && fields.thermalState !== "unknown" ? "screenshot" : "unverified";
+  appState.automaticSources.updateStatus = fields.updateStatus && fields.updateStatus !== "unknown" ? "screenshot" : "unverified";
+  renderAutomaticSourceBadge("autoThermalStateSource", appState.automaticSources.thermalState);
+  renderAutomaticSourceBadge("autoUpdateStatusSource", appState.automaticSources.updateStatus);
+  byId("autoSignalsDetails").open = appState.automaticSources.thermalState === "screenshot"
+    || appState.automaticSources.updateStatus === "screenshot";
+  appState.automaticSources.largestApp = fields.largestApp ? "screenshot" : "unverified";
+  appState.automaticSources.largestAppSize = fields.largestAppSize !== null && fields.largestAppSize !== undefined ? "screenshot" : "unverified";
+  appState.automaticSources.topBatteryApp = fields.topBatteryApp ? "screenshot" : "unverified";
+  appState.automaticSources.topBatteryPercent = fields.topBatteryPercent !== null && fields.topBatteryPercent !== undefined ? "screenshot" : "unverified";
+
+  const issues = Array.isArray(parsed.issues) ? parsed.issues : [];
+  const missing = ["autoTotalStorage", "autoFreeStorage", "autoBatteryCapacity"].filter((id) => byId(id).value === "");
+  const messages = [];
+  if (missing.length) messages.push("Complete os campos em amarelo que não puderam ser lidos.");
+  if (issues.length) messages.push(issues.slice(0, 2).map((issue) => issue?.message || "Uma captura precisa ser conferida.").join(" "));
+  byId("automaticReviewError").textContent = messages.join(" ");
+}
+
+function setAutomaticField(suffix, capturedValue) {
+  const input = byId(`auto${suffix}`);
+  const sourceNode = byId(`auto${suffix}Source`);
+  const hasCaptured = capturedValue !== null && capturedValue !== undefined && capturedValue !== "" && capturedValue !== "unknown";
+  const value = hasCaptured ? capturedValue : "";
+  input.value = suffix === "BatteryStatus" ? (value || "unknown") : formatInputNumber(value);
+
+  const source = hasCaptured ? "screenshot" : "unverified";
+  appState.automaticSources[`${suffix.charAt(0).toLowerCase()}${suffix.slice(1)}`] = source;
+
+  if (source === "screenshot") {
+    sourceNode.textContent = "LIDO — CONFIRA";
+    sourceNode.className = "source-badge";
+  } else {
+    sourceNode.textContent = suffix === "BatteryStatus" ? "CONFIRME" : "NÃO ENCONTRADO";
+    sourceNode.className = "source-badge pending";
+  }
+}
+
+function markAutomaticFieldEdited(inputId, sourceKey, badgeId) {
+  const value = byId(inputId).value;
+  const isEmpty = value === "" || value === "unknown";
+  appState.automaticSources[sourceKey] = isEmpty ? "unverified" : "user";
+  if (!badgeId) return;
+  const badge = byId(badgeId);
+  const needsVerification = sourceKey === "batteryStatus" || sourceKey === "thermalState" || sourceKey === "updateStatus";
+  badge.textContent = isEmpty ? (needsVerification ? "NÃO VERIFICADA" : "NÃO ENCONTRADO") : "AJUSTADO POR VOCÊ";
+  badge.className = isEmpty ? "source-badge pending" : "source-badge user";
+}
+
+function renderAutomaticSourceBadge(badgeId, source) {
+  const badge = byId(badgeId);
+  if (source === "screenshot") {
+    badge.textContent = "LIDO — CONFIRA";
+    badge.className = "source-badge";
+    return;
+  }
+  badge.textContent = "NÃO VERIFICADA";
+  badge.className = "source-badge pending";
+}
+
+function formatInputNumber(value) {
+  if (value === null || value === undefined || value === "" || Number.isNaN(Number(value))) return "";
+  return String(value);
+}
+
+function formatRecognizedName(value) {
+  const name = String(value || "")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 40);
+  if (!name) return "";
+  const normalized = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const known = {
+    "fotos": "Fotos",
+    "photos": "Fotos",
+    "whatsapp": "WhatsApp",
+    "whatsapp business": "WhatsApp Business",
+    "facebook": "Facebook",
+    "instagram": "Instagram",
+    "instagram lite": "Instagram Lite",
+    "chrome": "Chrome",
+    "safari": "Safari",
+    "telegram": "Telegram",
+    "youtube": "YouTube",
+    "google drive": "Google Drive",
+    "capcut": "CapCut",
+    "tiktok": "TikTok"
+  };
+  if (known[normalized]) return known[normalized];
+  return name.replace(/\b\p{L}/gu, (letter) => letter.toUpperCase()).slice(0, 40);
+}
+
+async function finishAutomaticDiagnosis(event) {
+  event.preventDefault();
+  byId("automaticReviewError").textContent = "";
+  all('#automaticReviewForm [aria-invalid="true"]').forEach((node) => node.removeAttribute("aria-invalid"));
+  const totalStorage = automaticNumericValue("autoTotalStorage");
+  const freeStorage = automaticNumericValue("autoFreeStorage");
+  const batteryCapacity = automaticNumericValue("autoBatteryCapacity");
+  const batteryStatus = byId("autoBatteryStatus").value || "unknown";
+  const largestApp = byId("autoLargestApp").value.trim().slice(0, 40);
+  const largestAppSize = optionalNumericValue("autoLargestAppSize");
+  const topBatteryApp = byId("autoTopBatteryApp").value.trim().slice(0, 40);
+  const topBatteryPercent = optionalNumericValue("autoTopBatteryPercent");
+
+  if (![128, 256, 512, 1024].includes(totalStorage) || Number.isNaN(freeStorage) || freeStorage < 0 || freeStorage > totalStorage) {
+    setAutomaticError("Confirme a capacidade total e um espaço disponível válido.", "autoFreeStorage");
+    return;
+  }
+  if (Number.isNaN(batteryCapacity) || batteryCapacity < 1 || batteryCapacity > 100) {
+    setAutomaticError("Confirme a capacidade máxima da bateria entre 1% e 100%.", "autoBatteryCapacity");
+    return;
+  }
+  const usedStorage = totalStorage - freeStorage;
+  if (!Number.isFinite(largestAppSize) || largestAppSize < 0 || largestAppSize > usedStorage + 0.1 || (largestAppSize > 0 && !largestApp)) {
+    setAutomaticError("Confira o maior item: informe o nome e um tamanho entre 0 e o espaço usado.", "autoLargestAppSize");
+    return;
+  }
+  if (!Number.isFinite(topBatteryPercent) || topBatteryPercent < 0 || topBatteryPercent > 100 || (topBatteryPercent > 0 && !topBatteryApp)) {
+    setAutomaticError("Confira o uso de bateria: informe o aplicativo e um percentual entre 0% e 100%.", "autoTopBatteryPercent");
+    return;
+  }
+
+  const input = {
+    totalStorage,
+    freeStorage,
+    largestApp,
+    largestAppSize,
+    batteryCapacity,
+    batteryStatus,
+    fastDrain: byId("autoFastDrain").checked,
+    thermalState: byId("autoThermalState").value || "unknown",
+    symptoms: all('input[name="autoSymptom"]:checked').map((item) => item.value),
+    updateStatus: byId("autoUpdateStatus").value || "unknown",
+    topBatteryApp,
+    topBatteryPercent
+  };
+  const result = calculateDiagnosis(input);
+  result.sources = { ...appState.automaticSources };
+  result.sourceMethod = automaticSourceMethod(result.sources, input);
+  result.confidence = result.sourceMethod === "screenshot"
+    ? "screenshot-confirmed"
+    : result.sourceMethod === "screenshot-assisted" ? "screenshot-assisted" : "user-confirmed";
+  const successMessage = result.sourceMethod === "screenshot"
+    ? "Capturas confirmadas e análise salva somente neste aparelho."
+    : result.sourceMethod === "screenshot-assisted"
+      ? "Capturas conferidas e análise salva somente neste aparelho."
+      : "Análise salva com os dados preenchidos neste aparelho.";
+  await persistCompletedDiagnosis(result, successMessage);
+}
+
+function setAutomaticError(message, focusId) {
+  byId("automaticReviewError").textContent = message;
+  const target = byId(focusId);
+  target?.setAttribute("aria-invalid", "true");
+  target?.focus();
+  showToast(message);
+}
+
+function automaticSourceMethod(sources, input) {
+  const values = Object.values(sources || {});
+  const hasScreenshot = values.includes("screenshot");
+  const hasUserEntry = values.includes("user") || input.fastDrain || input.symptoms.length > 0;
+  if (hasScreenshot && hasUserEntry) return "screenshot-assisted";
+  if (hasScreenshot) return "screenshot";
+  return "manual";
+}
+
+function automaticNumericValue(id) {
+  const raw = byId(id).value;
+  if (raw === "") return Number.NaN;
+  return Number(String(raw).replace(",", "."));
+}
+
+function optionalNumericValue(id) {
+  const raw = byId(id).value;
+  if (raw === "") return 0;
+  return Number(String(raw).replace(",", "."));
+}
+
+function detectClientEnvironment() {
+  const userAgent = navigator.userAgent || "";
+  const iosMatch = userAgent.match(/(?:CPU iPhone OS|iPhone OS)\s(\d+)(?:[._](\d+))?/i);
+  const isIPhone = /iPhone/i.test(userAgent);
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  return {
+    device: "iPhone 14 Pro Max (configurado)",
+    system: iosMatch ? `iOS ${iosMatch[1]}${iosMatch[2] ? `.${iosMatch[2]}` : ""}` : isIPhone ? "iOS" : "Não identificado",
+    mode: standalone ? "App instalado" : "Safari",
+    detectedAt: Date.now()
+  };
+}
+
+function renderClientEnvironment(environment) {
+  byId("detectedDevice").textContent = environment.device;
+  byId("detectedSystem").textContent = environment.system;
+  byId("detectedMode").textContent = environment.mode;
 }
 
 function beginDiagnosis() {
   byId("diagnosisForm").reset();
   appState.currentStep = 0;
   clearValidationMessages();
-  renderWizardStep();
   switchView("diagnosisView");
+  renderWizardStep();
   all(".nav-item").forEach((item) => {
     item.classList.remove("active");
     item.removeAttribute("aria-current");
@@ -130,7 +483,14 @@ function validateStep(step) {
     const total = numericValue("totalStorage");
     const free = numericValue("freeStorage");
     if (!total || Number.isNaN(free) || free < 0 || free > total) {
-      setError("storage", "Selecione a capacidade e informe um espaço disponível válido, menor que o total.");
+      setError("storage", "Selecione a capacidade e informe um espaço disponível válido, menor que o total.", "freeStorage");
+      return false;
+    }
+    const largestApp = byId("largestApp").value.trim();
+    const largestAppSize = optionalNumericValue("largestAppSize");
+    const usedStorage = total - free;
+    if (!Number.isFinite(largestAppSize) || largestAppSize < 0 || largestAppSize > usedStorage + 0.1 || (largestAppSize > 0 && !largestApp)) {
+      setError("storage", "No maior item opcional, informe o nome e um tamanho entre 0 e o espaço usado.", "largestAppSize");
       return false;
     }
   }
@@ -138,7 +498,7 @@ function validateStep(step) {
     const capacity = numericValue("batteryCapacity");
     const status = byId("batteryStatus").value;
     if (!capacity || capacity < 1 || capacity > 100 || !status) {
-      setError("battery", "Informe a capacidade máxima entre 1% e 100% e selecione a mensagem do iOS.");
+      setError("battery", "Informe a capacidade máxima entre 1% e 100% e selecione a mensagem do iOS.", "batteryCapacity");
       return false;
     }
   }
@@ -147,28 +507,42 @@ function validateStep(step) {
     return false;
   }
   if (step === 3 && !byId("updateStatus").value) {
-    setError("performance", "Informe se existe uma atualização do iOS pendente.");
+    setError("performance", "Informe se existe uma atualização do iOS pendente.", "updateStatus");
     return false;
   }
   return true;
 }
 
-function setError(key, message) {
+function setError(key, message, focusId) {
   const target = document.querySelector(`[data-error-for="${key}"]`);
   if (target) target.textContent = message;
+  const field = focusId ? byId(focusId) : key === "thermal" ? document.querySelector('input[name="thermalState"]') : null;
+  field?.setAttribute("aria-invalid", "true");
+  field?.focus();
   showToast(message);
 }
 
 function clearValidationMessages() {
   all(".field-error").forEach((node) => { node.textContent = ""; });
   all("select.invalid").forEach((node) => node.classList.remove("invalid"));
+  all('[aria-invalid="true"]').forEach((node) => node.removeAttribute("aria-invalid"));
 }
 
 async function finishDiagnosis(event) {
   event.preventDefault();
-  if (!validateStep(3)) return;
+  for (let step = 0; step < 4; step += 1) {
+    if (validateStep(step)) continue;
+    appState.currentStep = step;
+    renderWizardStep();
+    return;
+  }
   const input = collectFormData();
   const result = calculateDiagnosis(input);
+  result.sourceMethod = "manual";
+  await persistCompletedDiagnosis(result, "Diagnóstico concluído e salvo somente neste aparelho.");
+}
+
+async function persistCompletedDiagnosis(result, successMessage) {
   try {
     await saveAnalysis(result);
   } catch {
@@ -182,20 +556,19 @@ async function finishDiagnosis(event) {
   await refreshHistory(false);
   renderLatest(result);
   switchView("homeView");
-  showToast("Diagnóstico concluído e salvo somente neste aparelho.");
+  showToast(successMessage);
 }
 
 function collectFormData() {
   return {
     totalStorage: numericValue("totalStorage"),
     freeStorage: numericValue("freeStorage"),
-    largestApp: byId("largestApp").value.trim(),
-    largestAppSize: numericValue("largestAppSize") || 0,
+    largestApp: byId("largestApp").value.trim().slice(0, 40),
+    largestAppSize: optionalNumericValue("largestAppSize"),
     batteryCapacity: numericValue("batteryCapacity"),
     batteryStatus: byId("batteryStatus").value,
     fastDrain: byId("fastDrain").checked,
     thermalState: document.querySelector('input[name="thermalState"]:checked')?.value || "normal",
-    heatContext: checkedValues("heatContext"),
     symptoms: checkedValues("symptom"),
     updateStatus: byId("updateStatus").value
   };
@@ -224,6 +597,13 @@ function calculateDiagnosis(input) {
       title: "Interrompa o uso e deixe o iPhone esfriar",
       body: "Desconecte o carregador, retire a capa e leve o aparelho para um local ventilado. Não use gelo, geladeira ou água."
     });
+  } else if (input.thermalState === "charging_hold") {
+    score -= 10;
+    recommendations.push({
+      priority: "high",
+      title: "Aguarde a temperatura voltar à faixa normal",
+      body: "Recarga em Espera pode aparecer quando o iPhone está muito quente ou muito frio. Desconecte o carregador e leve-o a um ambiente de temperatura moderada. Se estiver quente, retire a capa e ventile; se estiver frio, deixe aquecer naturalmente. Não use gelo, geladeira, secador ou aquecedor."
+    });
   } else if (input.thermalState === "hot") {
     score -= 15;
     recommendations.push({
@@ -238,6 +618,12 @@ function calculateDiagnosis(input) {
       title: "Acompanhe a temperatura",
       body: "Aquecimento leve durante câmera, carregamento ou backup pode ocorrer. Confirme se o aparelho esfria após alguns minutos em repouso."
     });
+  } else if (input.thermalState === "unknown") {
+    recommendations.push({
+      priority: "normal",
+      title: "Temperatura não verificada automaticamente",
+      body: "O Safari não recebe o estado térmico interno do iPhone. Se houver calor frequente, complete esse sinal na próxima análise e interrompa o uso se aparecer um aviso de temperatura."
+    });
   }
 
   if (input.freeStorage < 5 || freeRatio < 0.05) {
@@ -245,28 +631,30 @@ function calculateDiagnosis(input) {
     recommendations.push({
       priority: "critical",
       title: "Armazenamento em nível crítico",
-      body: `Restam ${formatGb(input.freeStorage)}. Procure liberar aproximadamente ${formatGb(Math.max(targetFree, 5))} e mantenha ao menos 15% livre.`
+      body: `Restam ${formatGb(input.freeStorage)}. Procure liberar aproximadamente ${formatGb(Math.max(targetFree, 5))}; 15% é a margem preventiva adotada pelo Guardião, não uma exigência oficial do iOS.`
     });
   } else if (input.freeStorage < 15 || freeRatio < 0.10) {
     score -= 20;
     recommendations.push({
       priority: "high",
-      title: "Aumente a margem de armazenamento",
-      body: `Restam ${formatGb(input.freeStorage)}. Revise aplicativos, downloads e vídeos até alcançar cerca de ${formatGb(input.totalStorage * 0.15)} livres.`
+      title: "Aumente a margem preventiva de armazenamento",
+      body: `Restam ${formatGb(input.freeStorage)}. Revise aplicativos, downloads e vídeos até alcançar a margem preventiva do Guardião, cerca de ${formatGb(input.totalStorage * 0.15)} livres.`
     });
   } else if (freeRatio < 0.15) {
     score -= 12;
     recommendations.push({
       priority: "high",
-      title: "Armazenamento acima da faixa recomendada",
-      body: `Libere aproximadamente ${formatGb(Math.max(targetFree, 1))} para chegar a 15% de espaço livre.`
+      title: "Armazenamento abaixo da margem preventiva do Guardião",
+      body: `Libere aproximadamente ${formatGb(Math.max(targetFree, 1))} para chegar à margem preventiva de 15% adotada por este aplicativo.`
     });
   }
 
   let capacityPenalty = 0;
-  if (input.batteryCapacity < 80) capacityPenalty = 18;
-  else if (input.batteryCapacity < 85) capacityPenalty = 12;
-  else if (input.batteryCapacity < 90) capacityPenalty = 6;
+  if (input.batteryStatus !== "unverified_part") {
+    if (input.batteryCapacity < 80) capacityPenalty = 18;
+    else if (input.batteryCapacity < 85) capacityPenalty = 12;
+    else if (input.batteryCapacity < 90) capacityPenalty = 6;
+  }
 
   const statusPenalty = input.batteryStatus === "service" ? 25 : input.batteryStatus === "reduced" ? 15 : 0;
   let batteryPenalty = Math.max(capacityPenalty, statusPenalty);
@@ -280,6 +668,12 @@ function calculateDiagnosis(input) {
       priority: "critical",
       title: "O iOS recomenda serviço na bateria",
       body: "Faça backup e procure a Apple ou uma assistência autorizada. A mensagem do sistema é mais importante que qualquer estimativa deste aplicativo."
+    });
+  } else if (input.batteryStatus === "unverified_part") {
+    recommendations.push({
+      priority: "normal",
+      title: "As informações da bateria podem não ser precisas",
+      body: "O iOS não conseguiu verificar a bateria ou a peça. Não trate a capacidade exibida como diagnóstico de desgaste. Consulte Ajustes › Geral › Sobre › Histórico de Peças e Serviço e procure avaliação se a mensagem for inesperada ou houver falhas."
     });
   } else if (input.batteryStatus === "reduced") {
     recommendations.push({
@@ -313,6 +707,14 @@ function calculateDiagnosis(input) {
       priority: "high",
       title: "Compare o consumo das últimas 24 horas e 10 dias",
       body: "Em Ajustes › Bateria, toque em Mostrar Atividade e procure aplicativos com muita atividade em segundo plano e pouco tempo de tela."
+    });
+  }
+
+  if (input.topBatteryApp && input.topBatteryPercent > 0) {
+    recommendations.push({
+      priority: "normal",
+      title: `Confira a atividade de ${input.topBatteryApp}`,
+      body: `${input.topBatteryApp} apareceu com ${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(input.topBatteryPercent)}% do uso mostrado. Em Ajustes › Bateria, toque em Mostrar Atividade para separar uso em tela de atividade em segundo plano antes de restringir o aplicativo.`
     });
   }
 
@@ -367,7 +769,7 @@ function calculateDiagnosis(input) {
       recommendations.push({
         priority: "normal",
         title: freeRatio >= 0.15 ? "Fotos ocupa muito espaço, mas não há urgência" : "Revise fotos e vídeos com segurança",
-        body: `A biblioteca ocupa ${formatGb(input.largestAppSize)} e restam ${formatGb(input.freeStorage)} livres. Confirme uma cópia independente ou espaço suficiente no iCloud antes de apagar. Você também pode combinar duplicados ou usar Otimizar no iPhone. Atenção: no Fotos do iCloud, uma exclusão é sincronizada com os outros aparelhos.`
+        body: `A biblioteca ocupa ${formatGb(input.largestAppSize)} e restam ${formatGb(input.freeStorage)} livres. Antes de apagar, exporte uma cópia independente e confirme que ela abre. O Fotos do iCloud sincroniza exclusões; para ganhar espaço sem excluir, use Otimizar Armazenamento do iPhone.`
       });
     } else if (normalizedLargest.includes("whatsapp")) {
       recommendations.push({
@@ -400,6 +802,7 @@ function calculateDiagnosis(input) {
     createdAt: Date.now(),
     model: "iPhone 14 Pro Max",
     score,
+    rulesVersion: RULES_VERSION,
     confidence: "form-complete",
     input,
     recommendations
@@ -418,17 +821,21 @@ function renderLatest(result) {
   const used = Math.max(0, result.input.totalStorage - result.input.freeStorage);
   const usedPercent = Math.round((used / result.input.totalStorage) * 100);
   byId("lastAnalysis").textContent = `Atualizada em ${formatDate(result.createdAt)}`;
-  byId("confidenceBadge").textContent = "DADOS PREENCHIDOS";
+  byId("confidenceBadge").textContent = result.sourceMethod === "screenshot"
+    ? "CAPTURAS CONFIRMADAS"
+    : result.sourceMethod === "screenshot-assisted" ? "CAPTURA + CONFERÊNCIA" : "DADOS PREENCHIDOS";
   byId("confidenceBadge").className = "confidence-badge complete";
   byId("scoreNumber").textContent = String(result.score);
-  byId("scoreStatus").textContent = scoreStatus(result.score);
-  renderGauge(result.score);
+  byId("scoreStatus").textContent = resultStatus(result);
+  renderGauge(result.score, false, worstPriority(result.recommendations));
   byId("storageMetric").textContent = `${usedPercent}%`;
   byId("storageDetail").textContent = `${formatGb(result.input.freeStorage)} livres`;
   byId("batteryMetric").textContent = `${result.input.batteryCapacity}%`;
   byId("batteryDetail").textContent = batteryLabels[result.input.batteryStatus] || "Informado pelo usuário";
   byId("thermalMetric").textContent = thermalLabels[result.input.thermalState] || "—";
-  byId("thermalDetail").textContent = "Informado pelo usuário";
+  byId("thermalDetail").textContent = result.input.thermalState === "unknown"
+    ? "Não disponível no Safari"
+    : result.sources?.thermalState === "screenshot" ? "Lido da captura" : "Confirmado por você";
   byId("reportActions").hidden = false;
   renderRecommendations(result.recommendations);
 }
@@ -438,7 +845,7 @@ function renderEmptyState() {
   byId("confidenceBadge").textContent = "AGUARDANDO DADOS";
   byId("confidenceBadge").className = "confidence-badge neutral";
   byId("scoreNumber").textContent = "—";
-  byId("scoreStatus").textContent = "Faça o diagnóstico guiado para receber uma avaliação.";
+  byId("scoreStatus").textContent = "Analise capturas dos Ajustes para receber uma avaliação.";
   renderGauge(0, true);
   byId("storageMetric").textContent = "—";
   byId("storageDetail").textContent = "Informe no diagnóstico";
@@ -450,31 +857,53 @@ function renderEmptyState() {
   renderRecommendations([]);
 }
 
-function renderGauge(score, empty = false) {
+function renderGauge(score, empty = false, priority = "normal") {
   const progress = byId("scoreProgress");
   progress.setAttribute("stroke-dashoffset", String(empty ? GAUGE_LENGTH : GAUGE_LENGTH * (1 - score / 100)));
-  progress.setAttribute("stroke", empty ? "#62758a" : scoreColor(score));
+  progress.setAttribute("stroke", empty ? "#62758a" : scoreColor(score, priority));
 }
 
-function scoreColor(score) {
+function scoreColor(score, priority = "normal") {
+  if (priority === "critical" || score < 50) return "#ff6b6b";
+  if (priority === "high") return "#ffc857";
   if (score >= 85) return "#46d89b";
   if (score >= 70) return "#20d6c7";
   if (score >= 50) return "#ffc857";
   return "#ff6b6b";
 }
 
-function scoreClass(score) {
+function scoreClass(score, priority = "normal") {
+  if (priority === "critical") return "score-critical";
+  if (priority === "high") return score < 50 ? "score-critical" : "score-attention";
   if (score >= 85) return "score-excellent";
   if (score >= 70) return "score-good";
   if (score >= 50) return "score-attention";
   return "score-critical";
 }
 
+function worstPriority(recommendations = []) {
+  if (recommendations.some((item) => item.priority === "critical")) return "critical";
+  if (recommendations.some((item) => item.priority === "high")) return "high";
+  return "normal";
+}
+
 function scoreStatus(score) {
   if (score >= 85) return "Excelente — nenhum alerta importante informado.";
   if (score >= 70) return "Bom — existem ajustes recomendados.";
   if (score >= 50) return "Atenção — priorize as recomendações abaixo.";
-  return "Intervenção prioritária — siga primeiro os alertas críticos.";
+  return "Intervenção prioritária — comece pelas recomendações de maior prioridade.";
+}
+
+function resultStatus(result) {
+  const priorities = result?.recommendations?.map((item) => item.priority) || [];
+  if (priorities.includes("critical")) return "Intervenção prioritária — siga primeiro os alertas críticos.";
+  if (priorities.includes("high") && result.score >= 70) return "Atenção — existe uma prioridade importante mesmo com boa margem geral.";
+  const hasUnverifiedData = result?.input?.thermalState === "unknown"
+    || result?.input?.updateStatus === "unknown"
+    || result?.input?.batteryStatus === "unknown"
+    || result?.input?.batteryStatus === "unverified_part";
+  if (hasUnverifiedData && result.score >= 85) return "Nenhum alerta nos dados confirmados — ainda há itens não verificados.";
+  return scoreStatus(result.score);
 }
 
 function renderRecommendations(recommendations) {
@@ -510,14 +939,18 @@ function bindTools() {
   byId("exportHistory").addEventListener("click", exportHistory);
   byId("clearHistory").addEventListener("click", () => byId("confirmDialog").showModal());
   byId("confirmClear").addEventListener("click", async () => {
-    await clearAllAnalyses();
-    appState.latest = null;
-    appState.history = [];
-    renderEmptyState();
-    renderHistory();
-    byId("historyMetric").textContent = "0";
-    updateLocalDataSize();
-    showToast("Histórico local apagado. Nenhum dado do iPhone foi removido.");
+    try {
+      await clearAllAnalyses();
+      appState.latest = null;
+      appState.history = [];
+      renderEmptyState();
+      renderHistory();
+      byId("historyMetric").textContent = "0";
+      updateLocalDataSize();
+      showToast("Histórico local apagado. Nenhum dado do iPhone foi removido.");
+    } catch {
+      showToast("Não foi possível apagar o histórico. Tente novamente ou limpe os dados deste site no Safari.");
+    }
   });
 }
 
@@ -541,6 +974,7 @@ async function analyzeSelectedFiles(event) {
   }
   const total = files.reduce((sum, file) => sum + file.size, 0);
   byId("fileResult").textContent = `${files.length} ${files.length === 1 ? "arquivo selecionado" : "arquivos selecionados"} • ${formatBytes(total)}. Nomes e conteúdo não foram armazenados.`;
+  event.target.value = "";
 }
 
 async function shareLatestReport() {
@@ -562,12 +996,20 @@ async function shareLatestReport() {
 
 function buildReport(result) {
   const i = result.input;
+  const sourceDescription = result.sourceMethod === "screenshot"
+    ? "Capturas lidas localmente e valores confirmados"
+    : result.sourceMethod === "screenshot-assisted"
+      ? "Capturas lidas localmente com campos complementados ou corrigidos pelo usuário"
+      : "Valores preenchidos manualmente";
   const lines = [
     "RELATÓRIO GUARDIÃO IPHONE",
-    `${result.model} • ${formatDate(result.createdAt)}`,
+    formatDate(result.createdAt),
+    `Modelo configurado pelo proprietário: ${result.model} (não detectado pelo navegador)`,
     "",
-    `Nota estimada: ${result.score}/100`,
-    `Classificação: ${scoreStatus(result.score)}`,
+    `Índice estimado: ${result.score}/100`,
+    `Método: regras locais v${result.rulesVersion || "anterior"}`,
+    `Classificação: ${resultStatus(result)}`,
+    `Origem: ${sourceDescription}`,
     `Armazenamento: ${formatGb(i.freeStorage)} livres de ${formatGb(i.totalStorage)}`,
     `Capacidade máxima da bateria: ${i.batteryCapacity}%`,
     `Mensagem da bateria: ${batteryLabels[i.batteryStatus] || "Não informada"}`,
@@ -575,8 +1017,16 @@ function buildReport(result) {
     "",
     "RECOMENDAÇÕES"
   ];
+  if (i.topBatteryApp && i.topBatteryPercent) {
+    lines.splice(lines.length - 2, 0, `Maior uso de bateria reconhecido: ${i.topBatteryApp} (${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(i.topBatteryPercent)}%)`);
+  }
   result.recommendations.forEach((item, index) => lines.push(`${index + 1}. ${item.title}: ${item.body}`));
-  lines.push("", "Estimativa feita com dados informados pelo usuário. Nenhum arquivo pessoal foi incluído.");
+  const disclosure = result.sourceMethod === "screenshot"
+    ? "Estimativa feita com valores extraídos localmente de capturas escolhidas e confirmados pelo usuário. As imagens e o texto bruto não foram armazenados."
+    : result.sourceMethod === "screenshot-assisted"
+      ? "Estimativa feita com valores extraídos localmente de capturas e campos complementados ou corrigidos pelo usuário. As imagens e o texto bruto não foram armazenados."
+      : "Estimativa feita com dados informados pelo usuário. Nenhum arquivo pessoal foi incluído.";
+  lines.push("", disclosure);
   return lines.join("\n");
 }
 
@@ -589,12 +1039,14 @@ async function exportHistory() {
     createdAt: new Date(item.createdAt).toISOString(),
     model: item.model,
     score: item.score,
+    rulesVersion: item.rulesVersion || "anterior",
     totalStorage: item.input.totalStorage,
     freeStorage: item.input.freeStorage,
     batteryCapacity: item.input.batteryCapacity,
     batteryStatus: item.input.batteryStatus,
     thermalState: item.input.thermalState,
-    symptoms: item.input.symptoms
+    symptoms: item.input.symptoms,
+    sourceMethod: item.sourceMethod || "manual"
   }));
   downloadText("historico-guardiao-iphone.json", JSON.stringify(safeExport, null, 2), "application/json");
 }
@@ -637,7 +1089,7 @@ function renderHistory() {
     card.setAttribute("aria-label", `Abrir análise de ${formatDate(item.createdAt)}, nota ${item.score}`);
 
     const score = document.createElement("span");
-    score.className = `history-score ${scoreClass(item.score)}`;
+    score.className = `history-score ${scoreClass(item.score, worstPriority(item.recommendations))}`;
     score.textContent = String(item.score);
 
     const copy = document.createElement("span");
@@ -679,7 +1131,7 @@ function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js").catch(() => {
-      showToast("O modo offline será ativado no próximo acesso.");
+      showToast("Não foi possível preparar o modo offline. Reabra com internet e tente novamente.");
     });
   });
 }

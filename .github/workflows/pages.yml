@@ -9,15 +9,44 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o projeto
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Configurar o Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Instalar dependências de teste
+        run: npm ci
+      - name: Preparar componentes OCR fixados
+        run: npm run prepare:vendor
+      - name: Validar parser e OCR local
+        run: npm test
+      - name: Guardar componentes OCR validados
+        uses: actions/upload-artifact@v4
+        with:
+          name: guardiao-ocr
+          path: vendor
+          if-no-files-found: error
+          retention-days: 1
+
   deploy:
+    needs: test
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -25,6 +54,13 @@ jobs:
     steps:
       - name: Baixar o projeto
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Recuperar componentes OCR validados
+        uses: actions/download-artifact@v4
+        with:
+          name: guardiao-ocr
+          path: vendor
       - name: Configurar o GitHub Pages
         uses: actions/configure-pages@v5
       - name: Preparar os arquivos

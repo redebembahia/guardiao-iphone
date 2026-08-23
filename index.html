@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#07111f">
   <meta name="color-scheme" content="dark">
-  <meta name="description" content="Diagnóstico guiado, privado e seguro para o iPhone 14 Pro Max.">
+  <meta name="description" content="Diagnóstico por capturas, privado e seguro para o iPhone 14 Pro Max.">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Guardião">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; manifest-src 'self'; worker-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; manifest-src 'self'; worker-src 'self'; child-src 'self'">
   <title>Guardião iPhone</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
@@ -64,10 +64,18 @@
             <span>/100</span>
           </div>
         </div>
-        <p id="scoreStatus" class="score-status">Faça o diagnóstico guiado para receber uma avaliação.</p>
-        <button id="startDiagnosis" class="primary-button" type="button">INICIAR DIAGNÓSTICO GUIADO</button>
-        <p class="transparency-note">Estimativa baseada nas informações que você consulta nos Ajustes. O Safari não recebe acesso oculto ao sistema.</p>
+        <p id="scoreStatus" class="score-status">Analise capturas dos Ajustes para receber uma avaliação.</p>
+        <div class="analysis-entry-actions">
+          <button id="startAutomatic" class="primary-button" type="button">ANALISAR CAPTURAS AUTOMATICAMENTE</button>
+          <button id="startDiagnosis" class="ghost-button" type="button">PREENCHER MANUALMENTE</button>
+        </div>
+        <p class="transparency-note">O app lê no próprio iPhone somente as capturas escolhidas por você. Nenhuma imagem é enviada ou armazenada.</p>
       </article>
+
+      <details class="methodology-card">
+        <summary>Como o índice é calculado</summary>
+        <p>Regras locais v1.2.0: o índice começa em 100 e reduz conforme armazenamento, bateria, temperatura, drenagem, sintomas e atualização. A margem de 15% é preventiva e definida pelo Guardião. Alertas críticos do iOS sempre deixam o indicador vermelho, mesmo quando a nota numérica ainda é alta.</p>
+      </details>
 
       <div class="section-heading">
         <div>
@@ -118,6 +126,144 @@
       </div>
     </section>
 
+    <section id="automaticView" class="view" aria-labelledby="automaticTitle" hidden>
+      <div class="view-toolbar">
+        <button id="cancelAutomatic" class="back-button" type="button" aria-label="Voltar ao início">‹</button>
+        <div>
+          <span class="eyebrow">LEITURA LOCAL</span>
+          <h1 id="automaticTitle">Análise por capturas</h1>
+        </div>
+      </div>
+
+      <article class="automatic-card">
+        <span class="eyebrow">AUTOMAÇÃO PRIVADA</span>
+        <h2>Selecione as telas dos Ajustes</h2>
+        <p>O Guardião reconhece o texto no próprio aparelho, preenche os dados e pede apenas uma confirmação antes do relatório. O modelo iPhone 14 Pro Max é uma configuração desta análise, não uma detecção do Safari.</p>
+
+        <div class="device-detection" aria-label="Informações detectadas pelo navegador">
+          <span><small>MODELO DA ANÁLISE</small><strong id="detectedDevice">iPhone 14 Pro Max</strong></span>
+          <span><small>SISTEMA</small><strong id="detectedSystem">Verificando…</strong></span>
+          <span><small>MODO</small><strong id="detectedMode">Verificando…</strong></span>
+        </div>
+
+        <ol class="screenshot-steps">
+          <li><span>1</span><div><strong>Armazenamento do iPhone</strong><small>Ajustes › Geral › Armazenamento do iPhone</small></div></li>
+          <li><span>2</span><div><strong>Saúde da Bateria</strong><small>Ajustes › Bateria › Saúde da Bateria e Carregamento</small></div></li>
+          <li><span>3</span><div><strong>Uso da Bateria — opcional</strong><small>Ajustes › Bateria, mostrando a lista de aplicativos</small></div></li>
+        </ol>
+
+        <input id="screenshotPicker" class="file-input" type="file" accept="image/*" multiple>
+        <label for="screenshotPicker" class="primary-button file-picker-button">SELECIONAR CAPTURAS</label>
+        <p class="local-processing-note"><span aria-hidden="true">⛨</span> Leitura local, sem nuvem. Na primeira vez, mantenha a internet conectada para preparar o leitor.</p>
+
+        <div id="automaticProgress" class="automatic-progress" aria-live="polite" hidden>
+          <progress id="automaticProgressBar" class="progress-track" max="100" value="0" aria-label="Progresso da leitura"></progress>
+          <strong id="automaticProgressTitle">Preparando leitura…</strong>
+          <small id="automaticProgressDetail">A captura permanece somente na memória.</small>
+        </div>
+
+        <button id="automaticManualFallback" class="text-link-button" type="button">Prefiro preencher manualmente</button>
+      </article>
+
+      <form id="automaticReviewForm" class="automatic-review" novalidate hidden>
+        <div class="review-heading">
+          <span class="eyebrow">CONFIRMAÇÃO</span>
+          <h2>Dados encontrados</h2>
+          <p>Confira os valores destacados. Você pode corrigir qualquer leitura antes de gerar o relatório.</p>
+        </div>
+
+        <div class="review-field-heading">
+          <label for="autoTotalStorage">Capacidade total</label>
+          <span id="autoTotalStorageSource" class="source-badge pending">NÃO ENCONTRADO</span>
+        </div>
+        <select id="autoTotalStorage" aria-describedby="automaticReviewError" required>
+          <option value="">Selecione</option>
+          <option value="128">128 GB</option>
+          <option value="256">256 GB</option>
+          <option value="512">512 GB</option>
+          <option value="1024">1 TB</option>
+        </select>
+
+        <div class="review-field-heading">
+          <label for="autoFreeStorage">Espaço disponível em GB</label>
+          <span id="autoFreeStorageSource" class="source-badge pending">NÃO ENCONTRADO</span>
+        </div>
+        <input id="autoFreeStorage" type="number" min="0" max="1024" step="0.1" inputmode="decimal" placeholder="Ex.: 45,5" aria-describedby="automaticReviewError" required>
+
+        <div class="review-field-heading">
+          <label for="autoBatteryCapacity">Capacidade máxima da bateria</label>
+          <span id="autoBatteryCapacitySource" class="source-badge pending">NÃO ENCONTRADO</span>
+        </div>
+        <div class="suffix-input">
+          <input id="autoBatteryCapacity" type="number" min="1" max="100" step="1" inputmode="numeric" placeholder="Ex.: 75" aria-describedby="automaticReviewError" required>
+          <span>%</span>
+        </div>
+
+        <div class="review-field-heading">
+          <label for="autoBatteryStatus">Mensagem da bateria</label>
+          <span id="autoBatteryStatusSource" class="source-badge pending">CONFIRME</span>
+        </div>
+        <select id="autoBatteryStatus" aria-describedby="automaticReviewError" required>
+          <option value="unknown">Não identificada</option>
+          <option value="normal">Funcionamento normal</option>
+          <option value="reduced">Desempenho reduzido</option>
+          <option value="service">Serviço recomendado</option>
+          <option value="unverified_part">Bateria ou peça não verificada</option>
+        </select>
+
+        <div class="optional-block compact-optional">
+          <span class="optional-label">Itens reconhecidos — opcionais</span>
+          <div class="split-fields">
+            <input id="autoLargestApp" type="text" maxlength="40" placeholder="Maior item" aria-label="Maior item no armazenamento">
+            <input id="autoLargestAppSize" type="number" min="0" max="1024" step="0.1" inputmode="decimal" placeholder="GB" aria-label="Tamanho do maior item em GB">
+          </div>
+          <div class="split-fields secondary-split">
+            <input id="autoTopBatteryApp" type="text" maxlength="40" placeholder="Maior uso de bateria" aria-label="Aplicativo com maior uso de bateria">
+            <input id="autoTopBatteryPercent" type="number" min="0" max="100" step="0.1" inputmode="decimal" placeholder="%" aria-label="Percentual de uso da bateria">
+          </div>
+        </div>
+
+        <details id="autoSignalsDetails" class="quick-confirmation">
+          <summary>Sinais adicionais — confira</summary>
+          <div class="quick-field-heading">
+            <label for="autoThermalState">Temperatura percebida</label>
+            <span id="autoThermalStateSource" class="source-badge pending">NÃO VERIFICADA</span>
+          </div>
+          <select id="autoThermalState">
+            <option value="unknown">Não verificada</option>
+            <option value="normal">Normal</option>
+            <option value="warm">Morno</option>
+            <option value="hot">Muito quente</option>
+            <option value="warning">Aviso: o iPhone precisa esfriar</option>
+            <option value="charging_hold">Recarga em espera — pode estar quente ou frio</option>
+          </select>
+
+          <div class="quick-field-heading">
+            <label for="autoUpdateStatus">Atualização do iOS</label>
+            <span id="autoUpdateStatusSource" class="source-badge pending">NÃO VERIFICADA</span>
+          </div>
+          <select id="autoUpdateStatus">
+            <option value="unknown">Não verificada</option>
+            <option value="current">iOS atualizado</option>
+            <option value="pending">Existe atualização pendente</option>
+          </select>
+
+          <div class="check-list auto-check-list">
+            <label><input id="autoFastDrain" type="checkbox"><span>A bateria acaba muito rápido</span></label>
+            <label><input type="checkbox" name="autoSymptom" value="slow"><span>Aplicativos e telas demoram para abrir</span></label>
+            <label><input type="checkbox" name="autoSymptom" value="deviceRestart"><span>O iPhone reinicia ou desliga sozinho</span></label>
+            <label><input type="checkbox" name="autoSymptom" value="appCrash"><span>Aplicativos fecham sozinhos</span></label>
+          </div>
+        </details>
+
+        <p id="automaticReviewError" class="field-error" role="alert"></p>
+        <div class="review-actions">
+          <button id="rescanScreenshots" class="ghost-button" type="button">LER OUTRAS CAPTURAS</button>
+          <button class="primary-button" type="submit">CONFIRMAR E ANALISAR</button>
+        </div>
+      </form>
+    </section>
+
     <section id="diagnosisView" class="view" aria-labelledby="diagnosisTitle" hidden>
       <div class="view-toolbar">
         <button id="cancelDiagnosis" class="back-button" type="button" aria-label="Cancelar diagnóstico">‹</button>
@@ -138,7 +284,7 @@
           <p class="step-intro">Consulte em <strong>Ajustes › Geral › Armazenamento do iPhone</strong>.</p>
 
           <label for="totalStorage">Capacidade total</label>
-          <select id="totalStorage" name="totalStorage" required>
+          <select id="totalStorage" name="totalStorage" aria-describedby="storageError" required>
             <option value="">Selecione</option>
             <option value="128">128 GB</option>
             <option value="256">256 GB</option>
@@ -147,7 +293,7 @@
           </select>
 
           <label for="freeStorage">Espaço disponível em GB</label>
-          <input id="freeStorage" name="freeStorage" type="number" min="0" max="1024" step="0.1" inputmode="decimal" placeholder="Ex.: 42,5" required>
+          <input id="freeStorage" name="freeStorage" type="number" min="0" max="1024" step="0.1" inputmode="decimal" placeholder="Ex.: 42,5" aria-describedby="storageError" required>
 
           <div class="optional-block">
             <span class="optional-label">Maior item no armazenamento — opcional</span>
@@ -156,7 +302,7 @@
               <input id="largestAppSize" name="largestAppSize" type="number" min="0" max="1024" step="0.1" inputmode="decimal" placeholder="GB" aria-label="Tamanho do maior item em GB">
             </div>
           </div>
-          <p class="field-error" data-error-for="storage" role="alert"></p>
+          <p id="storageError" class="field-error" data-error-for="storage" role="alert"></p>
         </fieldset>
 
         <fieldset class="wizard-step" data-step="1" hidden>
@@ -165,16 +311,17 @@
 
           <label for="batteryCapacity">Capacidade máxima</label>
           <div class="suffix-input">
-            <input id="batteryCapacity" name="batteryCapacity" type="number" min="1" max="100" step="1" inputmode="numeric" placeholder="Ex.: 87" required>
+            <input id="batteryCapacity" name="batteryCapacity" type="number" min="1" max="100" step="1" inputmode="numeric" placeholder="Ex.: 87" aria-describedby="batteryError" required>
             <span>%</span>
           </div>
 
           <label for="batteryStatus">Mensagem exibida pelo iOS</label>
-          <select id="batteryStatus" name="batteryStatus" required>
+          <select id="batteryStatus" name="batteryStatus" aria-describedby="batteryError" required>
             <option value="">Selecione</option>
             <option value="normal">Funcionamento normal</option>
             <option value="reduced">Desempenho reduzido</option>
             <option value="service">Serviço recomendado</option>
+            <option value="unverified_part">Bateria ou peça não verificada</option>
             <option value="unknown">Não encontrei essa informação</option>
           </select>
 
@@ -185,14 +332,14 @@
               <small>Mesmo sem jogos, câmera ou navegação intensa.</small>
             </span>
           </label>
-          <p class="field-error" data-error-for="battery" role="alert"></p>
+          <p id="batteryError" class="field-error" data-error-for="battery" role="alert"></p>
         </fieldset>
 
         <fieldset class="wizard-step" data-step="2" hidden>
           <legend tabindex="-1">Temperatura</legend>
           <p class="step-intro">Escolha a situação que melhor representa o aparelho agora ou nos últimos dias.</p>
 
-          <div class="choice-list" role="radiogroup" aria-label="Estado de temperatura">
+          <div class="choice-list" role="radiogroup" aria-label="Estado de temperatura" aria-describedby="thermalError">
             <label class="choice-card">
               <input type="radio" name="thermalState" value="normal" required>
               <span><strong>Normal</strong><small>Sem calor perceptível.</small></span>
@@ -207,18 +354,15 @@
             </label>
             <label class="choice-card danger-choice">
               <input type="radio" name="thermalState" value="warning">
-              <span><strong>Aviso de temperatura</strong><small>Ou “Recarga em espera”.</small></span>
+              <span><strong>O iPhone precisa esfriar</strong><small>Apareceu um aviso claro de temperatura alta.</small></span>
+            </label>
+            <label class="choice-card danger-choice">
+              <input type="radio" name="thermalState" value="charging_hold">
+              <span><strong>Recarga em espera</strong><small>Pode ocorrer quando o aparelho está quente ou frio.</small></span>
             </label>
           </div>
 
-          <span class="optional-label">O que costuma acontecer quando aquece?</span>
-          <div class="chip-grid">
-            <label><input type="checkbox" name="heatContext" value="charging"><span>Carregando</span></label>
-            <label><input type="checkbox" name="heatContext" value="camera"><span>Câmera ou jogo</span></label>
-            <label><input type="checkbox" name="heatContext" value="backup"><span>Backup</span></label>
-            <label><input type="checkbox" name="heatContext" value="sun"><span>Sol ou carro</span></label>
-          </div>
-          <p class="field-error" data-error-for="thermal" role="alert"></p>
+          <p id="thermalError" class="field-error" data-error-for="thermal" role="alert"></p>
         </fieldset>
 
         <fieldset class="wizard-step" data-step="3" hidden>
@@ -234,13 +378,13 @@
           </div>
 
           <label for="updateStatus">Atualização do iOS</label>
-          <select id="updateStatus" name="updateStatus" required>
+          <select id="updateStatus" name="updateStatus" aria-describedby="performanceError" required>
             <option value="">Selecione</option>
             <option value="current">iOS atualizado</option>
             <option value="pending">Existe atualização pendente</option>
             <option value="unknown">Ainda não verifiquei</option>
           </select>
-          <p class="field-error" data-error-for="performance" role="alert"></p>
+          <p id="performanceError" class="field-error" data-error-for="performance" role="alert"></p>
         </fieldset>
 
         <div class="wizard-actions">
@@ -319,7 +463,7 @@
       <div id="historyList" class="history-list"></div>
       <div class="history-actions">
         <button id="exportHistory" class="secondary-button" type="button">EXPORTAR DADOS</button>
-        <button id="clearHistory" class="danger-button" type="button">APAGAR DADOS LOCAIS</button>
+        <button id="clearHistory" class="danger-button" type="button">APAGAR HISTÓRICO</button>
       </div>
     </section>
 
@@ -331,24 +475,28 @@
       <article class="privacy-card positive">
         <h2>O que o Guardião faz</h2>
         <ul>
-          <li>Calcula recomendações com os dados informados por você.</li>
+          <li>Lê localmente o texto das capturas escolhidas e descarta a imagem depois da confirmação.</li>
+          <li>Calcula recomendações somente com os valores confirmados por você.</li>
           <li>Mantém o diagnóstico e o histórico somente no iPhone.</li>
-          <li>Funciona offline depois do primeiro acesso.</li>
+          <li>Funciona offline depois que o leitor conclui a preparação inicial com internet.</li>
           <li>Compartilha o relatório apenas quando você solicita.</li>
         </ul>
       </article>
       <article class="privacy-card limit">
-        <h2>O que o iOS não permite</h2>
+        <h2>Limites e permissões</h2>
         <ul>
-          <li>Ler automaticamente armazenamento geral, RAM ou aplicativos instalados.</li>
+          <li>Ler telas dos Ajustes ou a fototeca sem uma captura selecionada por você.</li>
+          <li>Examinar RAM, arquivos ou aplicativos instalados silenciosamente.</li>
           <li>Medir temperatura ou capacidade máxima da bateria pelo Safari.</li>
           <li>Apagar arquivos, limpar caches ou alterar Ajustes sozinho.</li>
-          <li>Acessar fotos, mensagens, senhas, câmera, microfone ou localização.</li>
+          <li>O Guardião não solicita câmera, microfone, localização, mensagens, senhas nem acesso geral à fototeca; recebe somente os arquivos que você escolhe.</li>
         </ul>
       </article>
       <article class="privacy-card hosting">
         <h2>Hospedagem do aplicativo</h2>
         <p>Ao abrir o endereço, a hospedagem pode registrar metadados técnicos padrão, como IP, horário e navegador. Os dados preenchidos no diagnóstico não são enviados.</p>
+        <p>O endereço atual usa o domínio compartilhado do GitHub Pages: projetos publicados pela mesma conta compartilham a origem técnica do navegador. Um domínio exclusivo oferece isolamento mais forte.</p>
+        <a class="policy-link" href="./PRIVACIDADE.md" target="_blank" rel="noopener">LER POLÍTICA COMPLETA</a>
       </article>
       <article class="local-storage-card">
         <span>Histórico local do Guardião</span>
@@ -401,6 +549,9 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
+  <script src="./screen-parsers.js" defer></script>
+  <script src="./vendor/tesseract.min.js" defer></script>
+  <script src="./screenshot-import.js" defer></script>
   <script src="./app.js" defer></script>
 </body>
 </html>
