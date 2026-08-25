@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_NAME = "guardiao-iphone-v1.2.0";
+const CACHE_NAME = "guardiao-iphone-v1.3.0";
 const CACHE_PREFIX = "guardiao-iphone-";
 const APP_SHELL = [
   "./",
@@ -8,6 +8,7 @@ const APP_SHELL = [
   "./styles.css",
   "./screen-parsers.js",
   "./screenshot-import.js",
+  "./maintenance-tools.js",
   "./app.js",
   "./manifest.webmanifest",
   "./PRIVACIDADE.md",

@@ -67,7 +67,7 @@ const sampleInput = {
 };
 const sampleResult = evaluate(`calculateDiagnosis(${JSON.stringify(sampleInput)})`);
 assert.equal(sampleResult.score, 77);
-assert.equal(sampleResult.rulesVersion, "1.2.0");
+assert.equal(sampleResult.rulesVersion, "1.3.0");
 assert.ok(sampleResult.recommendations.some((item) => item.priority === "high"));
 
 for (const override of [

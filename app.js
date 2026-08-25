@@ -5,7 +5,9 @@ const DB_VERSION = 1;
 const STORE_NAME = "analyses";
 const MAX_HISTORY = 30;
 const GAUGE_LENGTH = 314.159;
-const RULES_VERSION = "1.2.0";
+const RULES_VERSION = "1.3.0";
+const MAINTENANCE_KEY = "guardiao-maintenance-v1";
+const MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 const thermalLabels = {
   normal: "Normal",
@@ -59,6 +61,8 @@ async function initialize() {
   registerServiceWorker();
   await refreshHistory();
   updateLocalDataSize();
+  restoreMaintenanceStatus();
+  await maybeRunAutomaticMaintenance();
 }
 
 function bindNavigation() {
@@ -935,6 +939,7 @@ function renderRecommendations(recommendations) {
 
 function bindTools() {
   byId("shareReport").addEventListener("click", shareLatestReport);
+  byId("runMaintenance").addEventListener("click", () => runMaintenanceCheck(true));
   byId("filePicker").addEventListener("change", analyzeSelectedFiles);
   byId("exportHistory").addEventListener("click", exportHistory);
   byId("clearHistory").addEventListener("click", () => byId("confirmDialog").showModal());
@@ -972,9 +977,33 @@ async function analyzeSelectedFiles(event) {
     byId("fileResult").textContent = "Nenhum arquivo selecionado.";
     return;
   }
-  const total = files.reduce((sum, file) => sum + file.size, 0);
-  byId("fileResult").textContent = `${files.length} ${files.length === 1 ? "arquivo selecionado" : "arquivos selecionados"} • ${formatBytes(total)}. Nomes e conteúdo não foram armazenados.`;
-  event.target.value = "";
+  const scanner = window.GuardianMaintenance;
+  if (!scanner?.scanFiles) {
+    byId("fileResult").textContent = "O verificador local não foi carregado. Feche o app, abra novamente com internet e tente outra vez.";
+    event.target.value = "";
+    return;
+  }
+
+  const result = byId("fileResult");
+  result.textContent = `Preparando a verificação local de ${files.length} arquivo(s)…`;
+  try {
+    const summary = await scanner.scanFiles(files, {
+      onProgress: ({ current, total }) => {
+        result.textContent = `Verificando arquivo ${current} de ${total}… Nenhum conteúdo é enviado.`;
+      }
+    });
+    const findings = [];
+    if (summary.emptyFiles) findings.push(`${summary.emptyFiles} vazio(s)`);
+    if (summary.unreadableFiles) findings.push(`${summary.unreadableFiles} ilegível(is)`);
+    if (summary.possibleDuplicateFiles) findings.push(`${summary.possibleDuplicateFiles} possível(is) duplicado(s) em ${summary.possibleDuplicateGroups} grupo(s)`);
+    const status = findings.length ? findings.join(" • ") : "nenhum problema encontrado nas amostras";
+    const limit = summary.truncated ? ` • limite seguro: ${summary.checkedFiles} de ${summary.selectedFiles} verificados` : "";
+    result.textContent = `${summary.selectedFiles} arquivo(s) • ${formatBytes(summary.totalBytes)} • ${status}${limit}. Leitura local concluída; nomes e amostras foram descartados.`;
+  } catch {
+    result.textContent = "Não foi possível concluir a verificação. Nenhum arquivo foi alterado.";
+  } finally {
+    event.target.value = "";
+  }
 }
 
 async function shareLatestReport() {
@@ -1130,10 +1159,109 @@ function configureInstallation() {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {
-      showToast("Não foi possível preparar o modo offline. Reabra com internet e tente novamente.");
-    });
+    navigator.serviceWorker.register("./sw.js")
+      .then((registration) => registration.update().catch(() => undefined))
+      .catch(() => {
+        showToast("Não foi possível preparar o modo offline. Reabra com internet e tente novamente.");
+      });
   });
+}
+
+function restoreMaintenanceStatus() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(MAINTENANCE_KEY) || "null");
+    if (stored?.checkedAt) renderMaintenanceStatus(stored);
+  } catch {
+    // A verificação atual continua disponível mesmo se o Safari bloquear o armazenamento local.
+  }
+}
+
+async function maybeRunAutomaticMaintenance() {
+  let lastRun = 0;
+  try {
+    lastRun = Number(JSON.parse(localStorage.getItem(MAINTENANCE_KEY) || "null")?.checkedAt || 0);
+  } catch {
+    lastRun = 0;
+  }
+  if (Date.now() - lastRun >= MAINTENANCE_INTERVAL_MS) await runMaintenanceCheck(false);
+}
+
+async function runMaintenanceCheck(manual) {
+  const button = byId("runMaintenance");
+  const target = byId("maintenanceResult");
+  button.disabled = true;
+  target.textContent = "Verificando dados locais, modo offline, resposta da interface e espaço reservado…";
+
+  const checks = [];
+  const details = [];
+
+  try {
+    const db = await openDatabase();
+    db.close();
+    checks.push({ name: "Histórico local", ok: true });
+  } catch {
+    checks.push({ name: "Histórico local", ok: false });
+  }
+
+  if ("serviceWorker" in navigator) {
+    const offlineReady = await Promise.race([
+      navigator.serviceWorker.ready.then(() => true).catch(() => false),
+      new Promise((resolve) => setTimeout(() => resolve(false), 1800))
+    ]);
+    checks.push({ name: "Modo offline", ok: offlineReady });
+  } else {
+    checks.push({ name: "Modo offline", ok: false });
+  }
+
+  if (navigator.storage?.estimate) {
+    try {
+      const estimate = await navigator.storage.estimate();
+      const usage = Number(estimate.usage || 0);
+      const quota = Number(estimate.quota || 0);
+      const ratio = quota > 0 ? usage / quota : 0;
+      checks.push({ name: "Espaço do Guardião", ok: !quota || ratio < 0.85 });
+      if (quota) details.push(`${formatBytes(Math.max(0, quota - usage))} disponíveis para dados do Guardião`);
+    } catch {
+      checks.push({ name: "Espaço do Guardião", ok: false });
+    }
+  } else {
+    details.push("cota local não informada pelo Safari");
+  }
+
+  const responseStart = performance.now();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const responseDelay = Math.max(0, Math.round(performance.now() - responseStart));
+  checks.push({ name: "Resposta da interface", ok: responseDelay < 180 });
+  details.push(`resposta local em ${responseDelay} ms`);
+
+  const failures = checks.filter((check) => !check.ok);
+  const report = {
+    checkedAt: Date.now(),
+    ok: failures.length === 0,
+    passed: checks.length - failures.length,
+    total: checks.length,
+    warnings: failures.map((check) => check.name),
+    details
+  };
+  try {
+    localStorage.setItem(MAINTENANCE_KEY, JSON.stringify(report));
+  } catch {
+    // O resultado ainda é mostrado, mas não persiste se o armazenamento estiver bloqueado.
+  }
+  renderMaintenanceStatus(report);
+  button.disabled = false;
+  if (manual) showToast(report.ok ? "Verificação concluída sem alertas." : "Verificação concluída com itens para revisar.");
+}
+
+function renderMaintenanceStatus(report) {
+  const badge = byId("maintenanceBadge");
+  badge.className = `confidence-badge ${report.ok ? "complete" : "warning"}`;
+  badge.textContent = report.ok ? "TUDO CERTO" : "REVISAR";
+  const status = report.ok
+    ? `${report.passed} de ${report.total} verificações concluídas.`
+    : `${report.passed} de ${report.total} verificações concluídas; revise ${report.warnings.join(", ")}.`;
+  const details = report.details?.length ? ` ${report.details.join(" • ")}.` : "";
+  byId("maintenanceResult").textContent = `${formatDate(report.checkedAt)} • ${status}${details}`;
 }
 
 async function updateLocalDataSize() {

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#07111f">
   <meta name="color-scheme" content="dark">
-  <meta name="description" content="Diagnóstico por capturas, privado e seguro para o iPhone 14 Pro Max.">
+  <meta name="description" content="Diagnóstico automático assistido, verificação local e otimização segura para o iPhone 14 Pro Max.">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Guardião">
@@ -74,8 +74,21 @@
 
       <details class="methodology-card">
         <summary>Como o índice é calculado</summary>
-        <p>Regras locais v1.2.0: o índice começa em 100 e reduz conforme armazenamento, bateria, temperatura, drenagem, sintomas e atualização. A margem de 15% é preventiva e definida pelo Guardião. Alertas críticos do iOS sempre deixam o indicador vermelho, mesmo quando a nota numérica ainda é alta.</p>
+        <p>Regras locais v1.3.0: o índice começa em 100 e reduz conforme armazenamento, bateria, temperatura, drenagem, sintomas e atualização. A margem de 15% é preventiva e definida pelo Guardião. Alertas críticos do iOS sempre deixam o indicador vermelho, mesmo quando a nota numérica ainda é alta.</p>
       </details>
+
+      <article class="maintenance-card">
+        <div class="maintenance-heading">
+          <div>
+            <span class="eyebrow">MANUTENÇÃO AUTOMÁTICA</span>
+            <h2>Verificação rápida do Guardião</h2>
+          </div>
+          <span id="maintenanceBadge" class="confidence-badge neutral">AGUARDANDO</span>
+        </div>
+        <p>Ao abrir o aplicativo, o Guardião confere no máximo uma vez por dia o funcionamento local, o modo offline, a resposta da interface e o espaço reservado ao app.</p>
+        <div id="maintenanceResult" class="maintenance-result" aria-live="polite">Nenhuma verificação automática registrada.</div>
+        <button id="runMaintenance" class="secondary-button" type="button">VERIFICAR AGORA</button>
+      </article>
 
       <div class="section-heading">
         <div>
@@ -442,14 +455,34 @@
             <li>Não apague conversas empresariais antes de confirmar o backup.</li>
           </ol>
         </details>
+
+        <details>
+          <summary><span class="guide-number">5</span><span><strong>VERIFICAÇÃO DE INTEGRIDADE</strong><small>Equivalente seguro ao Scandisk</small></span></summary>
+          <ol>
+            <li>Use a ferramenta abaixo para testar arquivos escolhidos no app Arquivos.</li>
+            <li>O Guardião identifica arquivos vazios, ilegíveis e possíveis duplicados sem enviar o conteúdo.</li>
+            <li>Para verificar o sistema do iPhone, abra <strong>Ajustes › Geral › Armazenamento do iPhone</strong> e confirme se não há alerta.</li>
+            <li>Falhas persistentes, reinícios ou arquivos que não abrem devem ser avaliados pelo Suporte Apple.</li>
+          </ol>
+        </details>
+
+        <details>
+          <summary><span class="guide-number">6</span><span><strong>PROCESSOS E APLICATIVOS</strong><small>Mais velocidade sem encerrar serviços essenciais</small></span></summary>
+          <ol>
+            <li>Reinicie o iPhone quando houver travamento contínuo ou aplicativos fechando.</li>
+            <li>Em <strong>Ajustes › Bateria</strong>, procure aplicativos com muita atividade em segundo plano e pouco tempo de tela.</li>
+            <li>Desative a atualização em segundo plano somente para aplicativos não essenciais.</li>
+            <li>Não force o encerramento frequente de todos os aplicativos; isso não funciona como um “limpador de RAM”.</li>
+          </ol>
+        </details>
       </div>
 
       <article class="file-analyzer">
-        <span class="eyebrow">ANÁLISE OPCIONAL</span>
-        <h2>Somar arquivos selecionados</h2>
-        <p>Escolha arquivos conscientemente. O Guardião soma apenas quantidade e tamanho; não lê nem envia o conteúdo.</p>
+        <span class="eyebrow">SCANDISK SEGURO</span>
+        <h2>Verificar arquivos selecionados</h2>
+        <p>O Guardião testa localmente a leitura de pequenas amostras, identifica arquivos vazios e possíveis duplicados. Nada é enviado ou guardado.</p>
         <input id="filePicker" class="file-input" type="file" multiple>
-        <label for="filePicker" class="secondary-button file-picker-button">SELECIONAR ARQUIVOS</label>
+        <label for="filePicker" class="secondary-button file-picker-button">VERIFICAR ARQUIVOS</label>
         <div id="fileResult" class="file-result" aria-live="polite">Nenhum arquivo selecionado.</div>
       </article>
     </section>
@@ -479,6 +512,8 @@
           <li>Calcula recomendações somente com os valores confirmados por você.</li>
           <li>Mantém o diagnóstico e o histórico somente no iPhone.</li>
           <li>Funciona offline depois que o leitor conclui a preparação inicial com internet.</li>
+          <li>Verifica automaticamente, ao abrir, se o aplicativo local, o modo offline e o armazenamento reservado estão funcionando.</li>
+          <li>Testa somente pequenas amostras dos arquivos escolhidos para detectar arquivos vazios, ilegíveis e possíveis duplicados.</li>
           <li>Compartilha o relatório apenas quando você solicita.</li>
         </ul>
       </article>
@@ -489,6 +524,8 @@
           <li>Examinar RAM, arquivos ou aplicativos instalados silenciosamente.</li>
           <li>Medir temperatura ou capacidade máxima da bateria pelo Safari.</li>
           <li>Apagar arquivos, limpar caches ou alterar Ajustes sozinho.</li>
+          <li>Desfragmentar o armazenamento flash ou executar uma varredura do sistema de arquivos do iOS.</li>
+          <li>Encerrar processos de outros aplicativos ou alterar sua execução em segundo plano.</li>
           <li>O Guardião não solicita câmera, microfone, localização, mensagens, senhas nem acesso geral à fototeca; recebe somente os arquivos que você escolhe.</li>
         </ul>
       </article>
@@ -552,6 +589,7 @@
   <script src="./screen-parsers.js" defer></script>
   <script src="./vendor/tesseract.min.js" defer></script>
   <script src="./screenshot-import.js" defer></script>
+  <script src="./maintenance-tools.js" defer></script>
   <script src="./app.js" defer></script>
 </body>
 </html>

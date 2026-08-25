@@ -1,6 +1,6 @@
 # Política de Privacidade — Guardião iPhone
 
-**Versão 1.2 — 23 de agosto de 2026**
+**Versão 1.3 — 24 de agosto de 2026**
 
 O Guardião iPhone processa os dados do diagnóstico no próprio navegador. Não há cadastro, publicidade, telemetria do aplicativo nem servidor que receba as respostas ou o histórico.
 
@@ -18,7 +18,11 @@ O proprietário pode confirmar ou informar espaço livre, capacidade máxima e m
 
 ## Arquivos selecionados
 
-O analisador opcional soma apenas quantidade e tamanho dos arquivos escolhidos conscientemente. O conteúdo não é lido nem enviado. Nomes dos arquivos não são armazenados no histórico.
+O verificador opcional recebe somente os arquivos escolhidos conscientemente. Para confirmar legibilidade e detectar arquivos vazios ou possíveis duplicados, ele lê pequenas amostras do início e do fim de cada arquivo, uma por vez. As amostras, os nomes e as impressões calculadas não são enviados, gravados no histórico ou mantidos após o resultado. A ferramenta não altera nem apaga os arquivos.
+
+## Verificação automática do aplicativo
+
+Ao abrir o Guardião, no máximo uma vez a cada 24 horas, o aplicativo pode conferir o banco de dados local, o modo offline, a resposta da interface e a estimativa de espaço reservada pelo Safari ao próprio Guardião. O resultado técnico fica no armazenamento local. A estimativa do navegador não representa o armazenamento total do iPhone.
 
 ## Histórico local
 
@@ -32,6 +36,6 @@ O relatório somente sai do aparelho quando o usuário toca em **Compartilhar re
 
 O Guardião não solicita câmera, microfone, localização, contatos ou acesso geral à fototeca. O seletor do iOS libera somente as capturas escolhidas pelo proprietário. O Safari não fornece ao app acesso direto à RAM, temperatura interna, consumo de outros aplicativos ou saúde completa da bateria. A instalação na Tela de Início não amplia essas permissões.
 
-O Guardião não apaga conteúdo, limpa caches, instala perfis nem altera configurações do iOS.
+O Guardião não apaga conteúdo, limpa caches, instala perfis nem altera configurações do iOS. Ele também não desfragmenta a memória flash, não varre o sistema de arquivos protegido e não encerra processos de outros aplicativos.
 
 Aplicativo independente para uso da Rede Bem Bahia. Não é afiliado, patrocinado ou endossado pela Apple.

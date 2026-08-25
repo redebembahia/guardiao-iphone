@@ -14,6 +14,9 @@ O modelo é configurado para esta análise pelo proprietário; o Safari identifi
 - histórico local das últimas 30 análises;
 - relatório compartilhável pela folha nativa do iOS;
 - análise opcional do tamanho agregado de arquivos escolhidos pelo usuário;
+- verificação automática diária, ao abrir, do funcionamento local, modo offline, resposta da interface e cota reservada ao aplicativo;
+- verificação segura de arquivos selecionados, com detecção de itens vazios, ilegíveis e possíveis duplicados por amostragem local;
+- guias específicos para integridade, processos, atividade em segundo plano e manutenção preventiva;
 - funcionamento offline depois que o leitor conclui a preparação inicial com internet;
 - interface ajustada às áreas seguras e à Dynamic Island.
 
@@ -28,11 +31,17 @@ No primeiro uso automático, mantenha a internet conectada até a leitura termin
 
 ## Limites do iOS
 
-O Safari não permite que uma PWA leia silenciosamente o armazenamento geral, a lista de aplicativos, a RAM, a temperatura interna ou a capacidade máxima da bateria. Por isso, a automação depende de capturas escolhidas pelo proprietário. O Guardião não possui botões para apagar arquivos, limpar cache ou alterar configurações sozinho.
+O Safari não permite que uma PWA leia silenciosamente o armazenamento geral, a lista de aplicativos, a RAM, a temperatura interna ou a capacidade máxima da bateria. Por isso, a automação depende de capturas escolhidas pelo proprietário. O Guardião também não pode desfragmentar a memória flash, varrer o sistema de arquivos do iOS ou encerrar processos de outros aplicativos. Ele oferece equivalentes seguros e verificáveis, sem botões para apagar arquivos, limpar cache ou alterar configurações sozinho.
 
 ## Metodologia do índice
 
-A versão 1.2.0 começa em 100 e aplica reduções determinísticas por armazenamento, bateria, temperatura, drenagem, sintomas e atualização. Os pesos máximos são: armazenamento 35; bateria 25; temperatura 25; drenagem 10; sintomas 15; atualização 5. A margem de 15% de armazenamento é uma meta preventiva adotada pelo Guardião, não uma exigência oficial do iOS. A cor visual também considera a pior prioridade: alerta crítico é vermelho e prioridade alta é, no mínimo, amarela.
+A versão 1.3.0 começa em 100 e aplica reduções determinísticas por armazenamento, bateria, temperatura, drenagem, sintomas e atualização. Os pesos máximos são: armazenamento 35; bateria 25; temperatura 25; drenagem 10; sintomas 15; atualização 5. A margem de 15% de armazenamento é uma meta preventiva adotada pelo Guardião, não uma exigência oficial do iOS. A cor visual também considera a pior prioridade: alerta crítico é vermelho e prioridade alta é, no mínimo, amarela.
+
+## Verificação automática e integridade
+
+Ao abrir o aplicativo, no máximo uma vez a cada 24 horas, o Guardião testa o banco de dados local, a preparação offline, a resposta da interface e a cota reservada ao próprio aplicativo. Essa cota não representa o armazenamento total do iPhone.
+
+O “Scandisk seguro” funciona somente sobre arquivos escolhidos no seletor do iOS. Ele lê amostras pequenas do início e do fim de cada item, sequencialmente, para confirmar legibilidade e apontar arquivos vazios ou possíveis duplicados. O conteúdo, os nomes e as impressões calculadas permanecem apenas na memória durante a verificação e são descartados ao final.
 
 ## Privacidade do OCR
 

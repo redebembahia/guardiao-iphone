@@ -309,6 +309,52 @@ main {
   color: var(--green);
 }
 
+.confidence-badge.warning {
+  background: rgba(255, 200, 87, 0.16);
+  color: var(--yellow);
+}
+
+.maintenance-card {
+  margin-top: 13px;
+  padding: 18px;
+  border: 1px solid rgba(32, 214, 199, 0.3);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(145deg, rgba(18, 45, 72, 0.96), rgba(13, 32, 53, 0.96));
+}
+
+.maintenance-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.maintenance-heading h2 {
+  margin: 5px 0 0;
+  font-size: 19px;
+}
+
+.maintenance-card > p {
+  margin: 12px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.maintenance-result {
+  margin-bottom: 13px;
+  padding: 12px;
+  border-radius: 13px;
+  background: #0c2035;
+  color: var(--white);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.maintenance-card .secondary-button {
+  width: 100%;
+}
+
 .score-gauge {
   position: relative;
   display: grid;
